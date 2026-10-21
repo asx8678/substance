@@ -4,6 +4,7 @@
 //! [`substance_core::deps::Dependency`].
 
 pub mod boot;
+pub mod db;
 pub mod deps;
 pub mod ladder;
 pub mod stack;

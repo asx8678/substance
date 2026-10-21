@@ -27,6 +27,13 @@ pub fn run_command(args: &RunArgs) -> Result<ExitCode, CliError> {
     let outcome = runtime()?.block_on(substance_orchestrator::run(&options));
     match outcome {
         Ok(outcome) => Ok(finish(args, &outcome)),
+        // An interrupt is reported as "interrupted", on one line, with exit 3. It goes through the
+        // error path rather than the outcome path because a run that stopped halfway has not
+        // produced the report `finish` would print a summary of.
+        Err(error @ RunError::Interrupted { .. }) => {
+            stderr_line(&format!("substance run: {error}"));
+            Ok(ExitCode::from(EXIT_INTERNAL))
+        }
         Err(error) => Err(map_error(error)),
     }
 }

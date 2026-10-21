@@ -3,6 +3,7 @@
 //! floats anywhere (ADR-0009).
 
 pub mod app_model;
+pub mod db;
 pub mod effect;
 pub mod finding;
 pub mod manifest;
@@ -17,6 +18,9 @@ pub mod verdict;
 pub use app_model::{
     AppModel, Control, ControlPurpose, Entity, Field, Form, Labels, RequestTrigger, Screen,
     TestUser,
+};
+pub use db::{
+    Capabilities, DbHandle, DecodingPlugin, RedactedUrl, TAG_CHARS, run_tag, snapshot_database,
 };
 pub use effect::{
     Action, DbDelta, EffectRecord, EgressEntry, EmailEntry, Injected, Logs, NetEntry, RowCounts,

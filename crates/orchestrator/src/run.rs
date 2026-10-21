@@ -15,6 +15,7 @@ use substance_core::model::report::{REPORT_SCHEMA_VERSION, Report};
 use substance_core::model::verdict::Target;
 use substance_core::{CheckId, Timestamp, wall_now_utc};
 use substance_report::{RunDir, RunDirError};
+use substance_runner::{InterruptGuard, Registrar, install};
 
 use crate::config::{ConfigSource, LoadError, load_config};
 use crate::intake::{IntakeError, intake};
@@ -92,6 +93,17 @@ pub enum RunError {
     /// A flag names something that cannot be used: a usage error, exit 2.
     #[error("{0}")]
     Usage(String),
+    /// The run was interrupted (Ctrl-C), and `cleaned` is what the handler got done first.
+    ///
+    /// An error rather than a fourth outcome, because a caller that ignores it must not go on to
+    /// print "0 checks, all measured" about a run that stopped halfway: the exit code has to be 3.
+    #[error("interrupted; {}", cleanup_report(cleaned))]
+    Interrupted {
+        /// What the interrupt handler removed, sorted. Empty means it reported nothing -- either
+        /// because nothing was registered yet or because the cleanup had not finished -- and not
+        /// that the host is clean.
+        cleaned: Vec<String>,
+    },
     /// A document could not be serialized: an internal error, exit 3.
     #[error(transparent)]
     Serialize(#[from] CanonicalJsonError),
@@ -116,6 +128,56 @@ pub enum RunError {
 /// Returns [`RunError::Intake`] or [`RunError::Config`] for a usage, config or intake
 /// problem (exit 2), and the other variants for an internal failure (exit 3).
 pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
+    // Installed before the first resource exists, and before intake, because a Ctrl-C during intake's
+    // `git archive` leaves a half-written work copy that nothing else would remove.
+    let registrar = Registrar::new();
+    let interrupt = install(registrar.clone());
+    let (_interrupt_guard, mut interrupted) = match interrupt {
+        Ok(installed) => installed,
+        // A run that cannot be interrupted cleanly is still a run. The alternative -- refusing to
+        // start -- would make substance unusable in the environments that lack signal support.
+        Err(error) => {
+            let (_sender, receiver) = tokio::sync::broadcast::channel(1);
+            // A sender kept alive for the run's lifetime would make every `recv` below wait for a
+            // message that never comes; dropping it means `recv` reports closed immediately, and
+            // `select!` then simply never takes the interrupt branch.
+            drop(_sender);
+            let _ = error;
+            (InterruptGuard::none(), receiver)
+        }
+    };
+    let ending = run_stages(options, &mut interrupted).await;
+    match ending {
+        // An interrupt won a `select!` below, so the listener is already running the cleanup. It is
+        // awaited here, before this function returns: returning first would drop the runtime the
+        // cleanup still needs and cancel the very work that keeps the server from keeping a slot.
+        Err(RunError::Interrupted { .. }) => {
+            let cleaned = _interrupt_guard
+                .wait_cleaned(std::time::Duration::from_secs(CLEANUP_WAIT))
+                .await;
+            Err(RunError::Interrupted { cleaned })
+        }
+        // Nothing was interrupted, so the listener stops rather than waiting for a signal that
+        // belongs to whatever runs next.
+        other => {
+            _interrupt_guard.stop();
+            other
+        }
+    }
+}
+
+/// How long an interrupted run waits for the listener's cleanup before it gives up and reports.
+const CLEANUP_WAIT: u64 = 10;
+
+/// The stages, with the interrupt receiver every wait point selects on.
+///
+/// The registrar is not a parameter yet because no stage in this build owns a resource an interrupt
+/// has to reach: M2-T04 is where the boot stage starts an app and provisions a database, and it
+/// takes the registrar so the listener can stop them. `run` holds it for that reason.
+async fn run_stages(
+    options: &RunOptions,
+    interrupted: &mut tokio::sync::broadcast::Receiver<()>,
+) -> Result<RunOutcome, RunError> {
     let out_root = options
         .out
         .clone()
@@ -124,13 +186,20 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
     if let Some(snapshot) = &options.snapshot_from {
         ensure_run_dir(snapshot)?;
     }
-    let checkout = intake(
-        &options.repo,
-        options.rev.as_deref(),
-        &out_root,
-        options.allow_exec,
+    let checkout = match interruptible(
+        interrupted,
+        intake(
+            &options.repo,
+            options.rev.as_deref(),
+            &out_root,
+            options.allow_exec,
+        ),
     )
-    .await?;
+    .await
+    {
+        Some(checkout) => checkout?,
+        None => return Err(interrupted_error()),
+    };
     let (config, source) = load_config(options.config.as_deref(), &checkout.root)?;
     let as_of = options.as_of.unwrap_or_else(wall_now_utc);
     let master_seed = options
@@ -244,6 +313,60 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
         run_dir: run_dir.as_path().to_path_buf(),
         gates_hit,
     })
+}
+
+/// Awaits `work`, or reports `None` the moment an interrupt arrives.
+///
+/// The work itself keeps running inside the `select!` and is dropped when the interrupt wins, which
+/// is the point: the stage's future stops at an await point and the interrupt handler cleans up what
+/// that future still owned. The cleanup happens in the listener's task, so cancelling this one does
+/// not cancel it.
+async fn interruptible<T>(
+    interrupted: &mut tokio::sync::broadcast::Receiver<()>,
+    work: impl std::future::Future<Output = T>,
+) -> Option<T> {
+    // Pinned so the same future can be awaited after `select!` gives up on it: a future that lost
+    // a race is still there, and dropping it would abort the stage instead of letting it finish.
+    let mut work = std::pin::pin!(work);
+    tokio::select! {
+        // Biased towards the work: a run that finished just as a Ctrl-C arrived is a finished run,
+        // and reporting it as interrupted would throw away a report that is already correct.
+        biased;
+        result = &mut work => Some(result),
+        result = interrupted.recv() => match result {
+            // A real signal. The stage's future is dropped here, which is what lets the interrupt
+            // handler clean up what it still owned.
+            Ok(()) => None,
+            // `Closed` is a platform without a listener; `Lagging` is a second Ctrl-C during a
+            // cleanup that is already running. Neither is an interrupt, and a closed channel is
+            // *always* ready -- so the work is awaited on its own rather than abandoned.
+            Err(_) => Some(work.await),
+        },
+    }
+}
+
+/// What the run reports when it is interrupted.
+///
+/// Shared by every interruptible point so the message and the exit code are the same wherever the
+/// interrupt landed. The list is empty here on purpose: the listener's own list, read by
+/// `InterruptGuard::wait_cleaned`, is the authoritative one, and only it knows what finished.
+fn interrupted_error() -> RunError {
+    RunError::Interrupted {
+        cleaned: Vec::new(),
+    }
+}
+
+/// One clause describing what the cleanup did.
+///
+/// Deliberately not "nothing was left" for the empty list: an empty list also covers a cleanup that
+/// timed out, and telling a reader the host is clean when we did not see the cleanup finish is the
+/// one thing this message must not do. `substance doctor` is what reconciles it.
+fn cleanup_report(cleaned: &[String]) -> String {
+    if cleaned.is_empty() {
+        "cleanup reported nothing; substance doctor (M2-T06) lists leftovers".to_owned()
+    } else {
+        format!("cleaned up {}", cleaned.join(", "))
+    }
 }
 
 /// The data `invocation.json` keeps: how the run was asked for, outside every hash.

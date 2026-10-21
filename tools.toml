@@ -157,3 +157,14 @@ pin = "TBD"
 checks = ["S01"]
 exec_repo_code = false
 network = false
+
+[tools.supabase]
+bin = "supabase"
+version_args = ["--version"]
+min_version = "1.0.0"   # `status -o json` and `db reset` as M2-T03 uses them
+pin = "2.121.0"         # supabase/cli refs/tags/v2.121.0; newest stable tag
+# M2-T03 drives the local stack through the CLI, and `db reset` applies the repository's own
+# migrations, so running it executes repo-controlled SQL.
+checks = []
+exec_repo_code = true
+network = false

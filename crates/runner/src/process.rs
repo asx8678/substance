@@ -36,6 +36,8 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -306,6 +308,139 @@ pub struct ExitInfo {
     pub group_empty: bool,
 }
 
+/// A latch an app's owner sets, so a stop can be reported at most once.
+///
+/// The app and its caller share one latch: the app holds it forever and reads it when it stops,
+/// and the caller holds it until [`OwnedApp`] drops. That is what makes a [`StoppedApp`] proof of
+/// something the app cannot fake: the token exists only because the app itself, inside
+/// [`AppProcess::stop`], saw that it was no longer running.
+#[derive(Debug, Clone, Default)]
+pub struct StopLatch {
+    /// Set by the app immediately before it returns the token.
+    stopped: Arc<AtomicBool>,
+}
+
+impl StopLatch {
+    /// A fresh latch, not yet set.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether the app that holds this latch has stopped.
+    ///
+    /// Read by the token's owner; the answer can only be true after a real stop, because the only
+    /// writer is [`AppProcess::stop`].
+    #[must_use]
+    pub fn is_set(&self) -> bool {
+        self.stopped.load(Ordering::SeqCst)
+    }
+}
+
+/// Proof that a particular app was stopped, and that its process group was empty when it stopped.
+///
+/// Every function that changes state a running app could be writing to takes one of these. It is
+/// deliberately impossible to manufacture:
+///
+/// - the constructor is private;
+/// - the one place that builds one is [`OwnedApp::stop`], after [`AppProcess::stop`] returned -- and
+///   [`AppProcess::stop`] returns only once the group is either empty or killed;
+/// - obtaining one needs `&mut` on the process that was started, so a caller cannot mint proof for
+///   an app it did not spawn.
+///
+/// `scripts/guards.sh` refuses a second `StoppedApp {` literal or `StoppedApp::new` call anywhere
+/// outside this module, because a caller that could build one could reset a database under a live
+/// app.
+///
+/// ## What the token does not claim
+///
+/// It is proof about *that* process, not a claim that nothing is running on the host. An
+/// [`AppProcess`] cannot be restarted -- starting an app creates a new one, with its own latch --
+/// so a token never becomes a lie about its own app, but a caller that spawned a *second* app and
+/// then reset the database would not be stopped by it either. That is why the orchestrator runs one
+/// app per run and resets between probes rather than during them; the token makes the intended
+/// discipline a compile-time requirement instead of a comment.
+#[derive(Debug)]
+pub struct StoppedApp {
+    /// The latch shared with the app that stopped, so the token can be invalidated by a restart.
+    latch: StopLatch,
+}
+
+impl StoppedApp {
+    /// Builds a token. Private: [`AppProcess::stop`] is the only caller.
+    const fn new(latch: StopLatch) -> Self {
+        Self { latch }
+    }
+
+    /// Whether the app that produced this token is still stopped.
+    ///
+    /// A consumer calls this before changing state; `false` means the app was started again after
+    /// the stop, so the token no longer proves anything.
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.latch.is_set()
+    }
+
+    /// Why a consumer must reject a token whose latch is clear.
+    ///
+    /// One sentence, in one place, so every message says the same thing. The latch is clear only
+    /// when `stop` never returned for the app the token came from, which in practice means the
+    /// caller is holding a latch it took before stopping -- so the sentence names the action the
+    /// caller has to take.
+    #[must_use]
+    pub fn invalid_reason() -> &'static str {
+        "the app has not been stopped, so nothing proves it is not writing"
+    }
+}
+
+// A token crosses await points and is shared by a caller that holds it while a reset runs, so it
+// has to be `Send` and `Sync`. Asserted at compile time, because the failure would otherwise appear
+// as an unhelpful "future is not Send" at a call site in another crate.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<StoppedApp>();
+    assert_send_sync::<StopLatch>();
+};
+
+/// The process and the latch its stop token is built from, moved together.
+///
+/// A caller that wants to be able to stop and then reset holds this instead of the process alone.
+/// The latch is cloned into the [`AppProcess`] at spawn so both sides point at the same flag.
+#[derive(Debug)]
+pub struct OwnedApp {
+    /// The running app.
+    app: AppProcess,
+}
+
+impl OwnedApp {
+    /// Takes ownership of a started app.
+    #[must_use]
+    pub fn new(app: AppProcess) -> Self {
+        Self { app }
+    }
+
+    /// The app, for reading its port and logs.
+    #[must_use]
+    pub fn app(&self) -> &AppProcess {
+        &self.app
+    }
+
+    /// Stops the app and returns proof that it is gone.
+    ///
+    /// The token is built only after the process group is empty (or the grace period expired and
+    /// the group was killed), so it cannot be obtained while anything the app started is alive.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever [`AppProcess::stop`] returns.
+    pub async fn stop(&mut self, grace: Duration) -> Result<(ExitInfo, StoppedApp), ProcessError> {
+        let info = self.app.stop(grace).await?;
+        // `stop` sets the latch; the token carries a handle to it, so a later restart invalidates
+        // this token rather than leaving the caller with a stale one.
+        Ok((info, StoppedApp::new(self.app.stop_latch.clone())))
+    }
+}
+
 /// Why a process could not be started, stopped or waited for.
 #[derive(Debug, thiserror::Error)]
 pub enum ProcessError {
@@ -414,6 +549,23 @@ enum Signal {
     Kill,
 }
 
+/// Kills a process group outright, for the interrupt handler.
+///
+/// The same call [`ProcessGuard`]'s `Drop` makes, exposed because the interrupt handler lives in
+/// another module and holds a group id rather than a guard. Deliberately only `SIGKILL`: a Ctrl-C
+/// has already interrupted whatever a graceful stop would wait on, so there is no task left to
+/// honour a grace period.
+///
+/// Returns whether a signal was delivered: `false` means the group was already gone, which is the
+/// normal case when the app's own guard ran first.
+#[must_use]
+pub fn kill_group_now(pgid: i32) -> bool {
+    if pgid <= 0 {
+        return false;
+    }
+    kill_group(pgid, Signal::Kill)
+}
+
 /// Sends `signal` to a process group.
 ///
 /// Returns `false` when the group no longer exists (`ESRCH`), which is how [`group_empty`] is
@@ -491,6 +643,11 @@ pub struct AppProcess {
     /// file, and each chunk is forwarded here as well. Giving the pipe itself to the caller would
     /// mean either an unlogged stream or two readers racing for the same bytes.
     stdout: Option<tokio::sync::mpsc::Receiver<Vec<u8>>>,
+    /// The latch a [`StoppedApp`] token is built from, shared with its owner.
+    ///
+    /// Cleared when the process is created and set when it is stopped, so a token is valid exactly
+    /// while the app it describes has not been restarted.
+    stop_latch: StopLatch,
 }
 
 /// A running substance-owned helper.
@@ -578,6 +735,26 @@ impl AppProcess {
     #[must_use]
     pub fn logs(&self) -> &LogSink {
         &self.logs
+    }
+
+    /// Whether this process has been stopped since it was created.
+    ///
+    /// Public because a caller may need to know before it has a [`StoppedApp`]: a stage that finds
+    /// a process handle lying around and wants to decide whether it may touch a database asks this
+    /// first. It says nothing about whether *anything* is running, only whether this handle's own
+    /// `stop` returned.
+    #[must_use]
+    pub fn is_stopped(&self) -> bool {
+        self.stop_latch.is_set()
+    }
+
+    /// This process's latch, for a caller that will take the [`StoppedApp`] after stopping it.
+    ///
+    /// Handing out the latch is not a way around the token: a latch that has not been set cannot
+    /// validate anything, [`StoppedApp::is_valid`] reads it, and nothing can set it but `stop`.
+    #[must_use]
+    pub fn stop_latch(&self) -> StopLatch {
+        self.stop_latch.clone()
     }
 
     /// The next chunk of stdout, when the spec asked for a pipe.
@@ -676,6 +853,10 @@ impl AppProcess {
         // gone from `killpg`'s view only once it has been reaped, and the caller is about to ask.
         let group_empty = self.wait_group_empty(Duration::from_secs(2)).await;
         self.guard.disarm();
+        // Set here rather than in `OwnedApp::stop`, so every path that stops an app leaves its
+        // latch consistent: a token built from this app is valid from now on, and a restart clears
+        // it again.
+        self.stop_latch.stopped.store(true, Ordering::SeqCst);
         let _ = alive;
         Ok(ExitInfo {
             code,
@@ -875,6 +1056,9 @@ async fn start(
         guard: ProcessGuard::new(pgid),
         spec: spec.clone(),
         stdout: stdout_rx,
+        // Fresh and clear: a process that has just started has not stopped, so any token built
+        // from a previous app is dead the moment it is read.
+        stop_latch: StopLatch::new(),
     })
 }
 

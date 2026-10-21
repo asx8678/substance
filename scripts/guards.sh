@@ -32,6 +32,14 @@ check "process spawning outside crates/runner" \
 check "ExecPermit grant outside crates/runner and orchestrator intake (M1-T01)" \
   rg -n --glob '*.rs' --glob '!**/runner/src/**' --glob '!**/orchestrator/src/intake.rs' \
     'ExecPermit::(new|grant|default)' "${roots[@]}"
+# M2-T03: a `StoppedApp` token is proof an app is not running, and every function that changes
+# state a running app could be writing to takes one. That proof is only worth something if the
+# token cannot be manufactured, so the constructor is private and this guard refuses a second one:
+# no struct literal and no `StoppedApp::new` outside the single `fn new` in the runner's process
+# module. A caller that could build one could reset a database under a live app.
+check "StoppedApp token construction outside crates/runner/src/process.rs (M2-T03)" \
+  rg -n --glob '*.rs' 'StoppedApp\s*\{|StoppedApp::new' crates \
+    -g '!**/runner/src/process.rs'
 # M1-T07: the rule pack is embedded with include_str!, which needs a literal path, so a rule
 # file added to rules/ but not to FILES would be silently ignored — a rule nobody runs. The
 # guard is what makes "embedded" a property of the tree rather than of one list.

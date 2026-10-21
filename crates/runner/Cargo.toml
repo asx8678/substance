@@ -10,8 +10,17 @@ serde_json = "1.0.154"
 substance-core = { version = "0.0.0", path = "../core" }
 thiserror = "2.0.21"
 # `io-util` for the stream pumps, `rt` for the spawned readers, and `macros` for the probe's
-# `#[tokio::main]`; the process supervisor needs all three.
-tokio = { version = "1.54.0", features = ["io-util", "macros", "process", "rt", "time"] }
+# `#[tokio::main]`; the process supervisor needs all three. `signal` carries the Ctrl-C listener
+# the interrupt module installs, and `sync` its broadcast channel.
+tokio = { version = "1.54.0", features = [
+    "io-util",
+    "macros",
+    "process",
+    "rt",
+    "signal",
+    "sync",
+    "time",
+] }
 tracing = "0.1.44"
 
 # `killpg` and nothing else: `nix`'s `signal` feature is safe Rust over the POSIX call, so the

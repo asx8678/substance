@@ -31,8 +31,9 @@ pub use config::{
 pub use hash::{CanonicalJsonError, canonical_json, canonical_json_value};
 pub use ids::{BlobRef, FindingId, RecordId, RunId, SnapshotId};
 pub use model::{
-    AppModel, BootOutcome, BootRung, CheckVerdict, CommandSpec, EffectRecord, Evidence, Finding,
-    Friction, Measured, Report, RouteEntry, RouteTable, RunManifest, Target, Verdict,
+    AppModel, BootOutcome, BootRung, Capabilities, CheckVerdict, CommandSpec, DbHandle,
+    DecodingPlugin, EffectRecord, Evidence, Finding, Friction, Measured, RedactedUrl, Report,
+    RouteEntry, RouteTable, RunManifest, Target, Verdict, snapshot_database,
 };
 pub use parts::{CheckPart, parts_of};
 pub use provenance::{
