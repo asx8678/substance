@@ -2230,7 +2230,7 @@ Tick each task in the same commit that completes it.
 - [x] M2-T05 O01–O05
 - [x] M2-T06 doctor
 - [x] M3-T01 TS driver
-- [ ] M3-T02 Driver host
+- [x] M3-T02 Driver host
 - [ ] M3-T03 Recorder channels
 - [ ] M3-T04 Egress proxy and Mailpit
 - [ ] M3-T05 Normalization and idle baseline

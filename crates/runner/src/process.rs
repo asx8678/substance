@@ -497,6 +497,15 @@ pub enum ProcessError {
         /// The client's error.
         detail: String,
     },
+    /// The caller asked to write to stdin, but the spec did not ask for a stdin pipe.
+    ///
+    /// A distinct variant because it is a caller's mistake, not a process failure: a spec built
+    /// without `piped_stdin` connects the child's stdin to `/dev/null`, and no retry fixes that.
+    #[error("{program} has no stdin pipe; set piped_stdin on its spec")]
+    NoStdin {
+        /// The program without a pipe.
+        program: String,
+    },
 }
 
 /// The drop guard: kills the group unless the process was stopped on purpose.
@@ -643,6 +652,12 @@ pub struct AppProcess {
     /// file, and each chunk is forwarded here as well. Giving the pipe itself to the caller would
     /// mean either an unlogged stream or two readers racing for the same bytes.
     stdout: Option<tokio::sync::mpsc::Receiver<Vec<u8>>>,
+    /// The child's stdin, when the spec set `piped_stdin`.
+    ///
+    /// `None` means the child's stdin is `/dev/null`, so a write has nowhere to go. Kept rather
+    /// than dropped because dropping it closes the pipe: a helper that reads commands until end of
+    /// input would see its first command and then stop.
+    stdin: Option<tokio::process::ChildStdin>,
     /// The latch a [`StoppedApp`] token is built from, shared with its owner.
     ///
     /// Cleared when the process is created and set when it is stopped, so a token is valid exactly
@@ -684,6 +699,35 @@ impl ServiceProcess {
     /// and stays running. `None` means it closed stdout, usually because it exited.
     pub async fn read_stdout(&mut self) -> Option<Vec<u8>> {
         self.inner.read_stdout().await
+    }
+
+    /// Takes the stdout receiver, for a caller that drives the helper from one task.
+    ///
+    /// The helper is written to and read from concurrently, so the reader cannot borrow the
+    /// process across an await; taking the receiver lets the caller own one half and the writer
+    /// the other. See [`AppProcess::take_stdout`].
+    #[must_use]
+    pub fn take_stdout(&mut self) -> Option<tokio::sync::mpsc::Receiver<Vec<u8>>> {
+        self.inner.take_stdout()
+    }
+
+    /// Writes to the helper's stdin, when the spec asked for a pipe.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::NoStdin`] when the spec did not ask for a stdin pipe, and
+    /// [`ProcessError::Io`] when the write fails -- usually because the child is gone.
+    pub async fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), ProcessError> {
+        self.inner.write_stdin(bytes).await
+    }
+
+    /// Closes the helper's stdin, which most programs read as "no more input".
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::Io`] when the pipe cannot be shut.
+    pub async fn close_stdin(&mut self) -> Result<(), ProcessError> {
+        self.inner.close_stdin().await
     }
 
     /// The helper's process group, for a caller that has to check it outlived the run.
@@ -755,6 +799,68 @@ impl AppProcess {
     #[must_use]
     pub fn stop_latch(&self) -> StopLatch {
         self.stop_latch.clone()
+    }
+
+    /// Takes the stdout receiver, for a caller that will read it from its own task.
+    ///
+    /// `read_stdout` borrows the process for the length of each read, so a caller that wants to
+    /// do something else with the process while it reads -- write to stdin, stop it -- cannot hold
+    /// that borrow across an await. Handing over the receiver is the way out; the log file keeps
+    /// receiving the same bytes either way, because the pump owns the pipe and only tees here.
+    ///
+    /// Writes to the child's stdin, when the spec set `piped_stdin`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::NoStdin`] when there is no pipe to write to, and
+    /// [`ProcessError::Io`] when the write fails.
+    pub async fn write_stdin(&mut self, bytes: &[u8]) -> Result<(), ProcessError> {
+        use tokio::io::AsyncWriteExt;
+
+        let Some(stdin) = self.stdin.as_mut() else {
+            return Err(ProcessError::NoStdin {
+                program: self.spec.program.clone(),
+            });
+        };
+        stdin
+            .write_all(bytes)
+            .await
+            .map_err(|source| ProcessError::Io {
+                program: self.spec.program.clone(),
+                source,
+            })?;
+        stdin.flush().await.map_err(|source| ProcessError::Io {
+            program: self.spec.program.clone(),
+            source,
+        })
+    }
+
+    /// Closes the child's stdin.
+    ///
+    /// A helper that reads until end of input needs this to exit: it sees every command, and then
+    /// the end. Dropping the handle would do it too, one `Drop` order later.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::Io`] when closing fails.
+    pub async fn close_stdin(&mut self) -> Result<(), ProcessError> {
+        use tokio::io::AsyncWriteExt;
+
+        let Some(mut stdin) = self.stdin.take() else {
+            return Ok(());
+        };
+        stdin.shutdown().await.map_err(|source| ProcessError::Io {
+            program: self.spec.program.clone(),
+            source,
+        })
+    }
+
+    /// Takes the stdout receiver, when the spec asked for a pipe.
+    ///
+    /// See [`ServiceProcess::take_stdout`] for why a caller wants this instead of `read_stdout`.
+    #[must_use]
+    pub fn take_stdout(&mut self) -> Option<tokio::sync::mpsc::Receiver<Vec<u8>>> {
+        self.stdout.take()
     }
 
     /// The next chunk of stdout, when the spec asked for a pipe.
@@ -995,6 +1101,7 @@ async fn start(
         });
     };
     let pgid = i32::try_from(pid).unwrap_or(-1);
+    let child_stdin = child.stdin.take();
 
     // The pumps write to the log files. They are spawned rather than awaited: the caller wants the
     // process handle back so it can wait for readiness, and the streams end when the child closes
@@ -1055,6 +1162,7 @@ async fn start(
         logs,
         guard: ProcessGuard::new(pgid),
         spec: spec.clone(),
+        stdin: child_stdin,
         stdout: stdout_rx,
         // Fresh and clear: a process that has just started has not stopped, so any token built
         // from a previous app is dead the moment it is read.

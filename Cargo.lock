@@ -2464,7 +2464,12 @@ dependencies = [
 name = "substance-recorder"
 version = "0.0.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "substance-core",
+ "substance-runner",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 
