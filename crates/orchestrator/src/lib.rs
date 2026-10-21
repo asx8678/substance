@@ -7,6 +7,7 @@
 pub mod config;
 pub mod intake;
 pub mod manifest;
+pub mod provenance;
 pub mod run;
 pub mod stage;
 pub mod thresholds;
@@ -18,6 +19,7 @@ pub use intake::{Checkout, IntakeError, intake};
 pub use manifest::{
     ManifestInputs, NO_HASH, REPETITIONS, build, default_master_seed, derive_run_id,
 };
+pub use provenance::{PanelInputs, provenance};
 pub use run::{GateHit, RunError, RunOptions, RunOutcome, run};
 pub use stage::Stage;
 pub use thresholds::THRESHOLDS_TOML;

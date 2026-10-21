@@ -62,6 +62,13 @@ pub struct StaticOutcome {
     pub notes: Vec<(CheckId, Vec<String>)>,
     /// What the rule walk covered.
     pub scan: ScanCoverage,
+    /// V03's vintage matches, as `(path, line, vintage id)`, sorted.
+    ///
+    /// A plain tuple rather than [`crate::scan::RuleMatch`] because the consumer is
+    /// `substance-history`, which this crate depends on and which therefore cannot name this
+    /// crate's types. The vintage id is the rule's `sub_check`, which is how the rule file and
+    /// `rules/provenance/api-vintage.toml` are kept in step.
+    pub vintage_matches: Vec<(String, u32, String)>,
 }
 
 /// The scan's coverage, kept so a report can say how much it looked at.
@@ -154,11 +161,17 @@ pub async fn run_static_checks(
         17,
         "twelve S checks, D04, O01, O10, T04 and L05"
     );
-    Ok(assemble(reports, &scan_report, pack.len()))
+    let vintage_matches = vintage_matches(&scan_report);
+    Ok(assemble(reports, &scan_report, pack.len(), vintage_matches))
 }
 
 /// Splits the reports into verdicts, findings and notes, in ID order.
-fn assemble(reports: Vec<StaticReport>, scan_report: &ScanReport, rules: usize) -> StaticOutcome {
+fn assemble(
+    reports: Vec<StaticReport>,
+    scan_report: &ScanReport,
+    rules: usize,
+    vintage_matches: Vec<(String, u32, String)>,
+) -> StaticOutcome {
     let mut verdicts: Vec<CheckVerdict> = Vec::new();
     let mut findings: Vec<Finding> = Vec::new();
     let mut notes: Vec<(CheckId, Vec<String>)> = Vec::new();
@@ -185,7 +198,32 @@ fn assemble(reports: Vec<StaticReport>, scan_report: &ScanReport, rules: usize) 
             authored_lines: scan_report.stats.authored_lines,
             rules,
         },
+        vintage_matches,
     }
+}
+
+/// V03's matches, flattened to what `substance-history` can name.
+///
+/// The rule's `sub_check` **is** the vintage id: `rules/provenance/api-vintage.yml` names one
+/// per rule, and `rules/provenance/api-vintage.toml` dates it. Keeping the id in the sub-check
+/// rather than in a second metadata field means a rule that names no vintage is caught when the
+/// table is read, not silently ignored.
+fn vintage_matches(scan_report: &ScanReport) -> Vec<(String, u32, String)> {
+    let mut matches: Vec<(String, u32, String)> = scan_report
+        .matches
+        .iter()
+        .filter(|found| found.check_id == CheckId::V03)
+        .map(|found| {
+            (
+                found.path.clone(),
+                found.start_line,
+                found.sub_check.clone(),
+            )
+        })
+        .collect();
+    matches.sort();
+    matches.dedup();
+    matches
 }
 
 /// The rule pack's hash, for a caller that wants the manifest value without loading the pack.

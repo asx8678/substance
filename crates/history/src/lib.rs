@@ -8,6 +8,7 @@ pub mod dates;
 pub mod deps;
 pub mod forge;
 pub mod git;
+pub mod provenance;
 pub mod registry;
 pub mod signals;
 pub mod snapshot;

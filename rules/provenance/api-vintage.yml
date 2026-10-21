@@ -1,0 +1,68 @@
+# V03 knowledge cut-off: outdated API styles (M1-T11).
+#
+# A call that a library retired on a known date brackets when the code was written: code that
+# calls `openai.ChatCompletion.create` was written before openai-python 1.0.0 replaced it. Each
+# rule's `sub_check` is the vintage id whose date range lives in `api-vintage.toml`, next to
+# this file: the patterns are ast-grep's job and the dates are V03's job, so each file is one
+# kind of data read by the one crate that can read it.
+#
+# Matching a pattern is not a finding. It is a bracketing: the plan's "knowledge window" is
+# the interval every match's date range leaves open, and it is reported, never scored — the
+# code may simply be old, or maintained by hand by someone who never learned the new API.
+
+id: v03-openai-chat-completion
+language: py
+severity: hint
+message: "`openai.ChatCompletion.create`, retired in openai-python 1.0"
+metadata:
+  check_id: V03
+  sub_check: openai-chat-completion-py
+rule:
+  # A call anywhere in the expression: `openai.ChatCompletion.create(...)` and
+  # `client.chat.completions` are different generations, and the old one is spelled with the
+  # module-level class.
+  pattern: openai.ChatCompletion.create($$$ARGS)
+
+---
+id: v03-openai-completion
+language: py
+severity: hint
+message: "`openai.Completion.create`, the pre-1.0 completions call"
+metadata:
+  check_id: V03
+  sub_check: openai-completion-py
+rule:
+  pattern: openai.Completion.create($$$ARGS)
+
+---
+id: v03-openai-module-key
+language: py
+severity: hint
+message: "`openai.api_key`, removed in openai-python 1.0's client object"
+metadata:
+  check_id: V03
+  sub_check: openai-module-key-py
+rule:
+  pattern: openai.api_key = $VALUE
+
+---
+id: v03-openai-v3-client
+language: ts
+severity: hint
+message: "the openai-node 3.x client, replaced by the 4.x client"
+metadata:
+  check_id: V03
+  sub_check: openai-v3-client-ts
+rule:
+  pattern: new OpenAIApi($$$ARGS)
+
+---
+id: v03-openai-v3-config
+language: ts
+severity: hint
+message: "`new Configuration({...})`, the openai-node 3.x config object"
+metadata:
+  check_id: V03
+  sub_check: openai-v3-client-ts
+rule:
+  pattern: new Configuration($$$ARGS)

@@ -29,5 +29,7 @@ pub use protocol::{
     ActCommand, AxeViolation, ClickBurst, ClockCommand, DriverCommand, DriverError, DriverEvent,
     LayoutBox, LoginCommand, NormalizePattern, OpenContext, RecordPart, RouteCommand, TraceCommand,
 };
-pub use report::{Archetype, Coverage, Provenance, REPORT_SCHEMA_VERSION, Ratio, Report};
+pub use report::{
+    Archetype, Coverage, KnowledgeCutoff, Provenance, REPORT_SCHEMA_VERSION, Ratio, Report,
+};
 pub use verdict::{CheckVerdict, Target, Verdict};

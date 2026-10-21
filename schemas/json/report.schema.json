@@ -1034,25 +1034,119 @@
       ],
       "type": "object"
     },
+    "KnowledgeCutoff": {
+      "additionalProperties": false,
+      "description": "The knowledge-cutoff estimate: the window V03's two inputs leave open.\n\nBoth bounds are lower bounds and both are deliberately loose: a dependency adopted in\n2022 could not have been known before it was published, and a call to an API retired in\n2023 was written before it was retired. The window is what those constraints leave, not a\nclaim about a model.",
+      "properties": {
+        "evidence": {
+          "description": "The sentences the bracket rests on, sorted: which adoption set `from` and which\nvintage set `to`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "The earliest instant the evidence permits, from adopted dependency releases."
+        },
+        "to": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "The latest instant the evidence permits, from API vintages still in use."
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "evidence"
+      ],
+      "type": "object"
+    },
     "Provenance": {
       "additionalProperties": false,
-      "description": "The provenance panel: a profile, never a score.",
+      "description": "The provenance panel: a profile, never a score.\n\nEvery field here is **reported**, never scored (ADR-0012): no field feeds a gate, a grade\nor the slop label. The panel answers \"how was this built\", and a reader weighs it; the\nchecks that judge the app never read it.\n\nThe plan's \"What the panel shows\" list is the shape: the declared share per tool and per\nmodel, then what could be said about review and tests, then the knowledge-cutoff bracket.\nA field whose input the run did not have stays absent or zero with\n`knowledge_cutoff_missing` or `notes` saying why — an absent share means nobody looked,\nand a share of zero would say nobody declared.",
       "properties": {
+        "declared_commits": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Declared commits in total, per tool, sorted by tool.",
+          "type": "object"
+        },
+        "declared_merged_unreviewed": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Declared commits merged with no review, per tool, sorted by tool.",
+          "type": "object"
+        },
+        "declared_model_permille": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Share of today's lines by declared model, where a tool named one, in permille.\n\nA tool that names no model (Codex writes a static trailer) contributes to the tool\nshare and not to this one, so the difference between the two maps is visible.",
+          "type": "object"
+        },
         "declared_tool_permille": {
           "additionalProperties": {
             "format": "uint32",
             "minimum": 0,
             "type": "integer"
           },
-          "description": "Share of today's lines by declared tool, in permille.",
+          "description": "Share of today's lines by declared tool, in permille. Sorted by tool name.",
           "type": "object"
         },
+        "declared_without_test_change": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Declared commits that changed no test file, per tool, sorted by tool.",
+          "type": "object"
+        },
+        "instruction_files": {
+          "description": "The instruction files present at HEAD, sorted by path. Each names a tool, not a model.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "knowledge_cutoff": {
-          "description": "The knowledge-cutoff estimate, when one could be made.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnowledgeCutoff"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The knowledge-cutoff bracket, when one could be made."
+        },
+        "knowledge_cutoff_missing": {
+          "description": "Why the knowledge cutoff is absent, when it is. A missing input, said out loud.",
           "type": [
             "string",
             "null"
           ]
+        },
+        "lines_blamed": {
+          "description": "How many of today's lines the blame covers, the denominator of every share.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "notes": {
+          "description": "Every note the panel needs read beside it, sorted.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "undeclared_permille": {
           "description": "Share of today's lines with no declared tool, in permille.",
@@ -1063,7 +1157,14 @@
       },
       "required": [
         "declared_tool_permille",
-        "undeclared_permille"
+        "declared_model_permille",
+        "undeclared_permille",
+        "lines_blamed",
+        "instruction_files",
+        "declared_merged_unreviewed",
+        "declared_without_test_change",
+        "declared_commits",
+        "notes"
       ],
       "type": "object"
     },

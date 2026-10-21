@@ -1,0 +1,132 @@
+# V01 declared provenance (M1-T11).
+#
+# Data, not code: the patterns a tool signs its work with, in one file a reviewer can read,
+# diff and correct. V01 matches these against commit trailers, author names, PR head refs and
+# the tree's instruction files, then maps the result onto today's lines with blame.
+#
+# Every entry can be switched off or spoofed, so a match is evidence and its absence proves
+# nothing. V01 therefore never scores (ADR-0012): it reports a share, and a repository with no
+# declarations looks identical to one whose declarations were stripped.
+#
+# `[[marker]]` — a commit's trailers or author name.
+#   tool           the name the report shows; lowercase, no spaces
+#   key            the trailer key to read, compared case-insensitively. Omit to read every
+#                  trailer, which is what catches a tool that puts its model in a trailer of
+#                  its own.
+#   contains       case-insensitive substrings; the marker matches when any one appears
+#   model_in_parens  read the model from parentheses, as Aider writes it: `aider (gpt-4o)`
+#
+# A marker with no `contains` matches on the key's presence alone, which is the strongest
+# form: Codex always writes its trailer, whatever the value.
+
+[[marker]]
+tool = "claude-code"
+key = "Co-authored-by"
+contains = ["noreply@anthropic.com", "claude"]
+
+[[marker]]
+tool = "codex"
+key = "Co-authored-by"
+contains = ["codex"]
+
+[[marker]]
+tool = "aider"
+key = "Co-authored-by"
+contains = ["aider"]
+model_in_parens = true
+
+# Aider also tags the author name, which survives a stripped trailer.
+[[marker]]
+tool = "aider"
+where = "author"
+contains = ["(aider)"]
+
+# A Copilot-authored commit. GitHub's Copilot writes a co-author trailer naming itself.
+[[marker]]
+tool = "copilot"
+key = "Co-authored-by"
+contains = ["copilot"]
+
+# Cursor writes its own trailer.
+[[marker]]
+tool = "cursor"
+key = "Co-authored-by"
+contains = ["cursor"]
+
+# A session link is the other thing Claude Code leaves, in the body rather than a trailer:
+# `https://claude.ai/code/session_...`. Matched on the whole message, because git only
+# reports a trailing block as trailers and a link mid-body is not one.
+[[marker]]
+tool = "claude-code"
+where = "message"
+contains = ["claude.ai/code/session_"]
+
+# Bot accounts that app builders commit as. A bot author is not a coding agent in itself, but
+# the plan lists bots with the agents for the same reason: it says a program wrote this.
+[[marker]]
+tool = "bot"
+where = "author"
+contains = ["[bot]", "-bot"]
+
+# `[[branch]]` — a PR head ref, which names the agent that opened it even when every commit
+# was rewritten. Matched as a prefix against the PR's `head_ref`.
+
+[[branch]]
+tool = "claude-code"
+prefix = "claude/"
+
+[[branch]]
+tool = "codex"
+prefix = "codex/"
+
+[[branch]]
+tool = "cursor"
+prefix = "cursor/"
+
+[[branch]]
+tool = "aider"
+prefix = "aider/"
+
+[[branch]]
+tool = "copilot"
+prefix = "copilot/"
+
+[[branch]]
+tool = "devin"
+prefix = "devin/"
+
+[[branch]]
+tool = "gemini"
+prefix = "gemini/"
+
+# `[[instruction_file]]` — a file that names the tool, never the model. `path` matches the
+# file itself or anything under it when it names a directory, so `.cursor/rules` covers
+# `.cursor/rules/style.mdc`.
+
+[[instruction_file]]
+path = "CLAUDE.md"
+tool = "claude-code"
+
+[[instruction_file]]
+path = "AGENTS.md"
+tool = "agents"
+
+[[instruction_file]]
+path = "GEMINI.md"
+tool = "gemini"
+
+[[instruction_file]]
+path = ".cursor/rules"
+tool = "cursor"
+
+[[instruction_file]]
+path = ".cursorrules"
+tool = "cursor"
+
+[[instruction_file]]
+path = ".github/copilot-instructions.md"
+tool = "copilot"
+
+[[instruction_file]]
+path = ".kiro/steering"
+tool = "kiro"

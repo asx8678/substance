@@ -1406,7 +1406,7 @@ pub const REGISTRY: &[CheckMeta] = &[
         gate: GateRule::None,
         needs: &[Need::Repo],
         milestone: Milestone::M1,
-        status: CheckStatus::Planned,
+        status: CheckStatus::Implemented,
         default_confidence: Confidence::Confirmed,
     },
     CheckMeta {
@@ -1432,7 +1432,7 @@ pub const REGISTRY: &[CheckMeta] = &[
         gate: GateRule::None,
         needs: &[Need::Registry],
         milestone: Milestone::M1,
-        status: CheckStatus::Planned,
+        status: CheckStatus::Implemented,
         default_confidence: Confidence::Confirmed,
     },
     CheckMeta {

@@ -43,4 +43,11 @@ if [ -d rules ]; then
     sh -c 'for f in rules/*/*.yml; do [ -e "$f" ] || continue
       grep -q "^  check_id:" "$f" && grep -q "^  sub_check:" "$f" || echo "$f"; done | grep -q .'
 fi
+# §1 rule 9: substance evaluates its own tree, and S05 flags one-off scripts, so a scratch
+# file left at the root is a defect the evaluator would report. The guard reads the *index*,
+# not the work tree: a scratch file that is not committed cannot fail rule 9, and a `tmp_*.py`
+# a developer is using locally must not break the build. `--directory` collapses the output to
+# one line per tracked path, so the root files are the ones with no `/` in them.
+check "no tracked scratch files at the repository root (rule 9)" \
+  sh -c 'git ls-files --directory | grep -v / | grep -Eq "^(tmp_|scratch)|\.(orig|rej)$"'
 exit $fail

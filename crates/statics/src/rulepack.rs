@@ -42,6 +42,10 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../../../rules/js/skipped-tests.yml"),
     ),
     (
+        "rules/provenance/api-vintage.yml",
+        include_str!("../../../rules/provenance/api-vintage.yml"),
+    ),
+    (
         "rules/python/escape-hatches.yml",
         include_str!("../../../rules/python/escape-hatches.yml"),
     ),

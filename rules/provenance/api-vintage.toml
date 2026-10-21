@@ -1,0 +1,33 @@
+# The date ranges behind `api-vintage.yml` (M1-T11).
+#
+# `current_from` is when the API became available and `current_to` is when the library retired
+# it, both from the release that changed it. Code calling the API was therefore written inside
+# that window, which is what V03 brackets the knowledge cut-off with: the earliest `current_to`
+# among the vintages a tree still uses is an upper bound on when its author's knowledge ends.
+#
+# `source` names where the date comes from, because a date invented here would silently move
+# every window V03 reports. A maintainer correcting one only edits this file.
+
+[[vintage]]
+id = "openai-chat-completion-py"
+current_from = "2020-06-11T00:00:00Z"
+current_to = "2023-11-06T00:00:00Z"
+source = "openai-python 1.0.0 on PyPI, released 2023-11-06, replaced the module-level classes"
+
+[[vintage]]
+id = "openai-completion-py"
+current_from = "2020-06-11T00:00:00Z"
+current_to = "2023-11-06T00:00:00Z"
+source = "openai-python 1.0.0 on PyPI, released 2023-11-06, replaced the module-level classes"
+
+[[vintage]]
+id = "openai-module-key-py"
+current_from = "2020-06-11T00:00:00Z"
+current_to = "2023-11-06T00:00:00Z"
+source = "openai-python 1.0.0 on PyPI, released 2023-11-06, replaced `openai.api_key` with a client object"
+
+[[vintage]]
+id = "openai-v3-client-ts"
+current_from = "2021-01-01T00:00:00Z"
+current_to = "2023-08-16T00:00:00Z"
+source = "openai-node 4.0.0 on npm, released 2023-08-16, replaced `OpenAIApi` and `Configuration`"
