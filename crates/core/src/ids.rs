@@ -38,6 +38,19 @@ macro_rules! id_type {
             /// The identifier's prefix.
             pub const PREFIX: &'static str = $prefix;
 
+            /// The prefix as it appears in a written id: `rec_`.
+            pub const PREFIX_WITH_SEPARATOR: &'static str = concat!($prefix, "_");
+
+            /// Wraps an identifier that already has its written form.
+            ///
+            /// For a caller that **validated** the text first -- the replay CLI checks the length and
+            /// the alphabet before it looks for a file, so a typo is a usage error rather than "no such
+            /// record". Nothing here re-derives: a derived value would not be the id the caller typed.
+            #[must_use]
+            pub fn parse(text: &str) -> Self {
+                Self(text.to_owned())
+            }
+
             /// Derives the identifier from `parts`.
             ///
             /// Each part is length-prefixed, so `["ab", "c"]` and `["a", "bc"]`

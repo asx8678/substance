@@ -3,12 +3,16 @@
 //! Commands land over several milestones. Every subcommand in the plan's synopsis
 //! parses from M0-T06 on; the ones without a body print `not implemented yet (Mx)`
 //! and exit 3, so a caller can wire the CLI into CI before the stages exist.
+//!
+//! `replay` landed in M3-T07 and is the first command here that reruns recorded work rather than
+//! reading a repository.
 
 mod checks;
 mod cli;
 mod doctor;
 mod error;
 mod output;
+mod replay;
 mod run;
 mod schema;
 
@@ -46,7 +50,7 @@ fn run() -> Result<ExitCode, CliError> {
 fn dispatch(command: Command) -> Result<ExitCode, CliError> {
     match command {
         Command::Run(args) => run::run_command(&args),
-        Command::Replay(_args) => not_yet("M3"),
+        Command::Replay(args) => replay::replay_command(&args),
         Command::Bench(_args) => not_yet("M5"),
         Command::Report(_args) => not_yet("M13"),
         Command::Schema { command } => match command {

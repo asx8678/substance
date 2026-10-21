@@ -115,6 +115,19 @@ pub struct ReplayArgs {
     /// The run directory the record belongs to.
     #[arg(long, value_name = "dir", value_hint = clap::ValueHint::DirPath)]
     pub run: PathBuf,
+    /// The repository to export the work copy from.
+    ///
+    /// A run directory does not record the path it was invoked from (`invocation.json` records it,
+    /// but as the caller typed it, and it need not exist on this machine), so a replay has to be told
+    /// where the code is.
+    #[arg(long, value_name = "repo", value_hint = clap::ValueHint::DirPath)]
+    pub source: Option<PathBuf>,
+    /// Allow running repo-controlled code.
+    ///
+    /// Required, because a replay boots the repository's code. It is deliberately not taken from the
+    /// replayed run: that grant was for that invocation.
+    #[arg(long)]
+    pub allow_exec: bool,
 }
 
 /// `substance bench`.

@@ -10,6 +10,7 @@ pub mod intake;
 pub mod manifest;
 pub mod operability;
 pub mod provenance;
+pub mod replay;
 pub mod run;
 pub mod runtime;
 pub mod stage;
@@ -23,7 +24,7 @@ pub use handlers::{
     Family, Handler, TriageFn, TriageJudgement, family_of, handler_for, has_handler,
     implemented_without_handler, triage_check_count,
 };
-pub use intake::{Checkout, IntakeError, intake};
+pub use intake::{Checkout, IntakeError, intake, permit_for};
 pub use manifest::{
     ManifestInputs, NO_HASH, REPETITIONS, build, default_master_seed, derive_run_id,
 };

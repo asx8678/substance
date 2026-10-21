@@ -9,6 +9,7 @@ pub mod clock;
 pub mod clock_controls;
 pub mod config;
 pub mod deps;
+pub mod diff;
 pub mod hash;
 pub mod ids;
 pub mod model;

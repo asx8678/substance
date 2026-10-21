@@ -2936,6 +2936,7 @@ dependencies = [
  "substance-adapters",
  "substance-core",
  "substance-history",
+ "substance-recorder",
  "substance-report",
  "substance-runner",
  "substance-statics",

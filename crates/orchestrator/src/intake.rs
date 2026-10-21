@@ -145,11 +145,7 @@ pub async fn intake(
     let commit_sha = resolve_commit(&root, rev.unwrap_or("HEAD")).await?;
     let origin = origin_of(&root).await;
     let git_version = git_version().await?;
-    let permit = if allow_exec {
-        Some(ExecPermit::grant())
-    } else {
-        None
-    };
+    let permit = permit_for(allow_exec);
     Ok(Checkout {
         root,
         origin,
@@ -157,6 +153,20 @@ pub async fn intake(
         git_version,
         permit,
     })
+}
+
+/// The permission to run repo-controlled code, granted only when the human gave `--allow-exec`.
+///
+/// The guard in `scripts/guards.sh` allows `ExecPermit::grant` in this module and nowhere else in
+/// the workspace (ADR-0009, §4.1): one function decides, so "why did this run execute code?" has one
+/// answer to read. `run`, `triage` and `replay` all ask here rather than calling the constructor.
+#[must_use]
+pub fn permit_for(allow_exec: bool) -> Option<ExecPermit> {
+    if allow_exec {
+        Some(ExecPermit::grant())
+    } else {
+        None
+    }
 }
 
 /// Whether `text` names a remote repository rather than a path.

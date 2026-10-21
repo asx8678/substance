@@ -107,6 +107,13 @@ pub enum RunError {
     /// A document could not be serialized: an internal error, exit 3.
     #[error(transparent)]
     Serialize(#[from] CanonicalJsonError),
+    /// The replay could not run, or could not compare its records: exit 3.
+    ///
+    /// Separate from [`Self::Usage`] because the caller's arguments were fine: a finding with no
+    /// record, or a record that cannot be normalized, is a limit of what this build can replay rather
+    /// than a mistake in the command line.
+    #[error("{0}")]
+    Replay(String),
     /// The file system refused an operation: an internal error, exit 3.
     #[error("cannot prepare {path}: {source}")]
     Io {

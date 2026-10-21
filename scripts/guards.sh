@@ -40,6 +40,14 @@ check "ExecPermit grant outside crates/runner and orchestrator intake (M1-T01)" 
 check "StoppedApp token construction outside crates/runner/src/process.rs (M2-T03)" \
   rg -n --glob '*.rs' 'StoppedApp\s*\{|StoppedApp::new' crates \
     -g '!**/runner/src/process.rs'
+# M3-T07 added a second constructor, `nothing_started()`, for a caller that has started no app in
+# its process at all -- the one case where "no app is writing here" is true without a stop. It is
+# just as forgeable, and a caller holding it while an app runs could reset a database underneath it,
+# so it gets the same treatment: allowed in exactly two places, the definition and the single
+# pre-boot reset site in replay, and nowhere else.
+check "StoppedApp::nothing_started outside its definition and the replay reset site (M3-T07)" \
+  rg -n --glob '*.rs' 'StoppedApp::nothing_started' crates \
+    -g '!**/runner/src/process.rs' -g '!**/orchestrator/src/replay.rs'
 # M1-T07: the rule pack is embedded with include_str!, which needs a literal path, so a rule
 # file added to rules/ but not to FILES would be silently ignored — a rule nobody runs. The
 # guard is what makes "embedded" a property of the tree rather than of one list.

@@ -393,6 +393,21 @@ impl StoppedApp {
     pub fn invalid_reason() -> &'static str {
         "the app has not been stopped, so nothing proves it is not writing"
     }
+
+    /// A token for a caller that has started no app in this process at all.
+    ///
+    /// `substance replay` is the case: it restores a snapshot before it ever boots anything, so the
+    /// question the token answers -- "is the app that was running here gone?" -- is answered by
+    /// "there was none". That is a different fact from "an app was stopped", and the type keeps them
+    /// apart: a latch nobody can set is returned, so the token can never later claim an app stopped.
+    ///
+    /// It is not an escape hatch for a caller with a live app: taking this token while a process is
+    /// running would be a lie the compiler cannot catch, so the one caller (`replay::drive`) uses it
+    /// before it spawns anything.
+    #[must_use]
+    pub fn nothing_started() -> Self {
+        Self::new(StopLatch::new())
+    }
 }
 
 // A token crosses await points and is shared by a caller that holds it while a reset runs, so it
