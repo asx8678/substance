@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use substance_core::config::ProjectConfig;
 use substance_core::hash::CanonicalJsonError;
-use substance_core::model::report::{Coverage, REPORT_SCHEMA_VERSION, Report};
+use substance_core::model::report::{REPORT_SCHEMA_VERSION, Report};
 use substance_core::model::verdict::Target;
-use substance_core::{CheckId, RunManifest, Timestamp, wall_now_utc};
+use substance_core::{CheckId, Timestamp, wall_now_utc};
 use substance_report::{RunDir, RunDirError};
 
 use crate::config::{ConfigSource, LoadError, load_config};
@@ -21,7 +21,6 @@ use crate::intake::{IntakeError, intake};
 use crate::manifest::{ManifestInputs, build, default_master_seed};
 use crate::stage::Stage;
 use crate::tools::{manifest_tools, probe_versions, table};
-use crate::verdicts;
 
 /// The default directory a run is written to, under the caller's working directory.
 pub const DEFAULT_RUNS_DIR: &str = "runs";
@@ -150,6 +149,7 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
         tools: manifest_tools(&probes),
         thresholds_version: crate::thresholds::version(),
         rule_pack_hash: substance_statics::rule_pack_hash(),
+        provenance_rules_hash: substance_core::provenance::DeclaredRules::hash(),
     })?;
     let run_dir = RunDir::create(&out_root, &manifest.run_id)?;
     run_dir.write_json("manifest.json", &manifest)?;
@@ -158,12 +158,91 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
         &Invocation::of(options, run_dir.as_path(), source.kind()),
     )?;
     write_tool_blobs(run_dir.as_path(), &probes)?;
-    let report = report_for(&manifest, &config, options.allow_exec, &source);
+
+    // The checks that read the repository without running it. `--triage-only` is the only mode
+    // this build has, so triage always runs; a later milestone adds the stages after it, and the
+    // checks that need them already report the milestone that will deliver them.
+    let thresholds =
+        crate::thresholds::thresholds().map_err(|error| RunError::Usage(error.to_string()))?;
+    let snapshot = match &options.snapshot_from {
+        Some(snapshot) => Some(
+            substance_history::snapshot::SnapshotHttp::replay(snapshot)
+                .map_err(|error| RunError::Usage(error.to_string()))?,
+        ),
+        None => Some(
+            substance_history::snapshot::SnapshotHttp::live(
+                run_dir.as_path(),
+                as_of,
+                config.budgets.forge_max_requests,
+            )
+            .map_err(|error| RunError::Usage(error.to_string()))?,
+        ),
+    };
+    let pending = crate::verdicts::pending(&config);
+    let triage = crate::triage::run_triage(
+        &crate::triage::TriageInput {
+            run_id: manifest.run_id.as_str(),
+            root: checkout.root.as_path(),
+            rev: &checkout.commit_sha,
+            origin: &checkout.origin,
+            as_of,
+            run_dir: run_dir.as_path(),
+            config: &config,
+            tools: &tools_file,
+            thresholds: &thresholds,
+            http: snapshot,
+            permit: checkout.permit.as_ref(),
+        },
+        pending,
+    )
+    .await
+    .map_err(RunError::Usage)?;
+
+    // Findings are written one file each, so a report row's evidence can point at the file that
+    // holds it rather than only at an id inside report.json.
+    for finding in &triage.findings {
+        let name = format!("findings/{}.json", finding.id.as_str());
+        run_dir.write_json(&name, finding)?;
+    }
+
+    let mut gates_hit: Vec<GateHit> = Vec::new();
+    for row in &triage.verdicts {
+        // A hard gate fires on the check's own failure under `Always`, and on a *named* part's
+        // failure under `SubChecks` (ADR-0002). The rule is asked once, here, so the exit code and
+        // the report's gate list answer the same question.
+        if matches!(row.verdict, substance_core::model::Verdict::Fail)
+            && substance_core::meta(row.check_id).gate.gates(&row.parts)
+        {
+            gates_hit.push(GateHit {
+                check_id: row.check_id,
+                target: row.target.clone(),
+            });
+        }
+    }
+    gates_hit
+        .sort_by(|left, right| (left.check_id, &left.target).cmp(&(right.check_id, &right.target)));
+
+    let report = Report {
+        schema_version: REPORT_SCHEMA_VERSION.to_owned(),
+        manifest: manifest.clone(),
+        verdicts: triage.verdicts,
+        findings: triage.findings,
+        coverage: triage.coverage,
+        archetype: triage.archetype,
+        provenance: triage.provenance,
+        notes: {
+            let mut notes = triage.notes_all;
+            notes.extend(run_notes(&config, options.allow_exec, &source));
+            notes.sort();
+            notes.dedup();
+            notes
+        },
+    };
     run_dir.write_json("report.json", &report)?;
     Ok(RunOutcome {
         report,
         run_dir: run_dir.as_path().to_path_buf(),
-        gates_hit: Vec::new(),
+        gates_hit,
     })
 }
 
@@ -211,44 +290,16 @@ impl Invocation {
     }
 }
 
-/// Builds report.json v0: every judging check `not_measured`, no findings.
-fn report_for(
-    manifest: &RunManifest,
-    config: &ProjectConfig,
-    allow_exec: bool,
-    source: &ConfigSource,
-) -> Report {
-    let mut verdicts = verdicts::pending(config);
-    verdicts
-        .sort_by(|left, right| (left.check_id, &left.target).cmp(&(right.check_id, &right.target)));
-    let measured = verdicts
-        .iter()
-        .filter(|row| row.verdict.is_measured())
-        .count();
-    let measured = u32::try_from(measured).unwrap_or(u32::MAX);
-    Report {
-        schema_version: REPORT_SCHEMA_VERSION.to_owned(),
-        manifest: manifest.clone(),
-        verdicts,
-        findings: Vec::new(),
-        coverage: Coverage {
-            checks_total: verdicts::judging_checks(),
-            checks_measured: measured,
-            routes: None,
-            controls: None,
-            server_code: None,
-        },
-        archetype: None,
-        provenance: None,
-        notes: notes(config, allow_exec, source),
-    }
-}
-
-/// The report's notes, sorted so equal runs write equal bytes.
-fn notes(config: &ProjectConfig, allow_exec: bool, source: &ConfigSource) -> Vec<String> {
+/// The notes about how this run was invoked, sorted so equal runs write equal bytes.
+///
+/// This milestone builds the triage stage only, so the note says which stages are absent rather
+/// than leaving a reader to infer it from a list of `not_measured` verdicts. The `--allow-exec`
+/// note and the disabled-check count are the other two facts a reader needs beside the numbers.
+fn run_notes(config: &ProjectConfig, allow_exec: bool, source: &ConfigSource) -> Vec<String> {
     let mut notes = vec![
-        "report v0: the triage, runtime, explore, spec, probe and judge stages are not \
-         built yet, so every check reports not_measured with its milestone"
+        "this build runs the triage stage only: the runtime, explore, spec, probe and judge \
+         stages arrive in later milestones, so the checks that need them report not_measured \
+         with their milestone"
             .to_owned(),
     ];
     notes.push(format!("config source: {}", source.kind()));

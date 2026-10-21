@@ -2222,7 +2222,7 @@ Tick each task in the same commit that completes it.
 - [x] M1-T09 D04, O01, O10, T04–T06, L05
 - [x] M1-T10 P01–P07
 - [x] M1-T11 V01, V03
-- [ ] M1-T12 Report v0 and triage end to end
+- [x] M1-T12 Report v0 and triage end to end
 - [ ] M2-T01 Working copy and supervisor
 - [ ] M2-T02 StackAdapter and TS stacks
 - [ ] M2-T03 DbAdapter

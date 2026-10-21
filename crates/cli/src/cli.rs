@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use substance_core::Severity;
 use substance_core::Timestamp;
 
 /// A deterministic, evidence-backed evaluator for applications.
@@ -227,15 +228,28 @@ pub enum FailOn {
 }
 
 impl FailOn {
-    /// Whether a run with `gates` failed gates must exit 1.
+    /// Whether a run must exit 1, given the gates it hit and the severities of its findings.
     ///
-    /// No findings can be produced until M1, so only `gate` can fire today: the other
-    /// thresholds are about finding severities, and a run without findings hits none.
+    /// The plan's rule (§M13-T01, applied from M1-T12):
+    ///
+    /// - `gate` — exit 1 when `gates_hit` is not empty;
+    /// - `critical` — exit 1 on any critical finding;
+    /// - `high` — exit 1 on any high **or** critical finding, because a threshold names the
+    ///   lowest severity that counts;
+    /// - `none` — never exit 1; the findings are still in the report.
+    ///
+    /// A hint never trips it: [`Severity::Info`] is below every threshold, and a hint's
+    /// confidence is `hint` rather than `confirmed`, which the caller has already filtered.
+    /// Flaky verdicts never trip it either — nothing here reads a verdict.
     #[must_use]
-    pub fn wants_failure(self, gates: usize) -> bool {
+    pub fn wants_failure_for(self, gates: usize, findings: &[Severity]) -> bool {
         match self {
             Self::Gate => gates > 0,
-            Self::Critical | Self::High | Self::None => false,
+            Self::Critical => findings.contains(&Severity::Critical),
+            Self::High => findings
+                .iter()
+                .any(|severity| matches!(severity, Severity::Critical | Severity::High)),
+            Self::None => false,
         }
     }
 }

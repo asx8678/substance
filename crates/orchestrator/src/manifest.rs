@@ -46,6 +46,8 @@ pub struct ManifestInputs<'a> {
     pub thresholds_version: String,
     /// The rule pack's sha256, from the embedded `rules/<lang>/*.yml`.
     pub rule_pack_hash: String,
+    /// The provenance rule files' sha256, from the embedded `rules/provenance/*.toml`.
+    pub provenance_rules_hash: String,
 }
 
 /// Builds the manifest, with `run_id` derived from everything else in it.
@@ -76,6 +78,7 @@ pub fn build(inputs: &ManifestInputs<'_>) -> Result<RunManifest, CanonicalJsonEr
         rule_pack_hash: inputs.rule_pack_hash.clone(),
         thresholds_version: inputs.thresholds_version.clone(),
         scoring_weights_version: NO_HASH.to_owned(),
+        provenance_rules_hash: inputs.provenance_rules_hash.clone(),
         config_hash: inputs.config_hash.clone(),
         allow_exec: inputs.allow_exec,
         egress_enforced: false,

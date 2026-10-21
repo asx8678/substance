@@ -59,6 +59,14 @@ pub struct DepsOutcome {
     pub forge_requests: u32,
     /// The notes the registry clients recorded, sorted.
     pub registry_notes: Vec<String>,
+    /// The registry facts, kept for the provenance panel.
+    ///
+    /// Returned rather than fetched again: V03 lower bound is the newest release among the
+    /// versions the project adopted, which is the document P02 and P03 already read. A second
+    /// fetch would double the registry request count for one date per dependency.
+    pub known: Known,
+    /// When each direct dependency was adopted, kept for the same reason.
+    pub added_at: BTreeMap<(substance_core::deps::Ecosystem, String), Timestamp>,
 }
 
 /// Why the dependency pass could not run at all.
@@ -206,6 +214,8 @@ pub async fn run_dependency_checks(mut input: DepsInput<'_>) -> Result<DepsOutco
         judgments,
         registry_requests,
         registry_notes,
+        known,
+        added_at,
     ))
 }
 
@@ -401,6 +411,8 @@ fn assemble(
     judgments: Vec<Judgment>,
     registry_requests: u32,
     registry_notes: Vec<String>,
+    known: Known,
+    added_at: BTreeMap<(substance_core::deps::Ecosystem, String), Timestamp>,
 ) -> DepsOutcome {
     let mut verdicts: Vec<CheckVerdict> = Vec::new();
     let mut notes: Vec<(CheckId, Vec<String>)> = Vec::new();
@@ -459,6 +471,8 @@ fn assemble(
         registry_requests,
         forge_requests: 0,
         registry_notes,
+        known,
+        added_at,
     }
 }
 

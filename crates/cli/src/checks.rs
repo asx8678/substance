@@ -11,8 +11,10 @@ use crate::output::stdout_line;
 
 /// One registry entry as shown to a caller.
 ///
-/// Field order follows the plan's synopsis. There is no handler name yet: M1-T12
-/// adds it once handlers exist.
+/// Field order follows the plan's synopsis. `handler` is whether a stage in this build runs the
+/// check: it comes from the orchestrator's own dispatch table (`handler_for`), not from the
+/// registry's `status`, so a check the registry calls `implemented` with nothing to run it shows
+/// `false` here. That difference is exactly what `C-IMPL` tests for (M1-T12, rule 6).
 #[derive(Debug, Serialize)]
 struct CheckRow {
     /// The check ID.
@@ -37,6 +39,8 @@ struct CheckRow {
     status: CheckStatus,
     /// The confidence a finding starts with.
     default_confidence: Confidence,
+    /// Whether a stage in this build runs the check.
+    handler: bool,
 }
 
 impl CheckRow {
@@ -55,6 +59,7 @@ impl CheckRow {
             milestone: entry.milestone,
             status: entry.status,
             default_confidence: entry.default_confidence,
+            handler: substance_orchestrator::has_handler(entry.id),
         }
     }
 

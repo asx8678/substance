@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>substance report {{ report.manifest.repo.commit_sha }}</title>
+<style>
+  /* Everything this report needs is in this file: no stylesheet is fetched, no font is loaded,
+     and no script runs. A report must be readable on a machine with no network, which is also
+     what makes it safe to open: nothing here can phone home. */
+  :root {
+    --ink: #1c1f23; --muted: #5b6570; --line: #d8dee6; --bg: #ffffff;
+    --pass: #1c6b3a; --fail: #a3221c; --report: #4a5568; --absent: #7a5c00;
+    --panel: #f7f9fb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.5rem 4rem; max-width: 62rem; background: var(--bg);
+    color: var(--ink); line-height: 1.5;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  h2 { font-size: 1.15rem; margin: 2.5rem 0 .75rem; padding-bottom: .35rem;
+       border-bottom: 1px solid var(--line); }
+  h3 { font-size: .95rem; margin: 1.5rem 0 .5rem; }
+  p, li { font-size: .9rem; }
+  .muted { color: var(--muted); }
+  .small { font-size: .8rem; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: .82rem; }
+  .banner { border: 1px solid #e6d9a8; background: #fdf8e6; border-radius: 6px;
+            padding: .7rem .9rem; margin: 1rem 0; font-size: .85rem; }
+  .banner strong { color: var(--absent); }
+  table { width: 100%; border-collapse: collapse; margin: .5rem 0 1rem; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line);
+           font-size: .82rem; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase;
+       font-size: .68rem; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+          gap: .75rem; margin: .75rem 0 1rem; }
+  .cell { border: 1px solid var(--line); border-radius: 6px; padding: .7rem .8rem; }
+  .cell .n { font-size: 1.5rem; font-weight: 600; letter-spacing: -.02em; }
+  .cell .k { font-size: .7rem; color: var(--muted); text-transform: uppercase;
+             letter-spacing: .04em; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+           padding: .9rem 1rem; }
+  .tag { display: inline-block; border-radius: 3px; padding: .05rem .35rem;
+         font-size: .7rem; font-weight: 600; letter-spacing: .02em; }
+  .v-pass { color: var(--pass); } .v-fail { color: var(--fail); }
+  .v-reported { color: var(--report); } .v-not_measured { color: var(--absent); }
+  .v-unverifiable { color: var(--absent); } .v-flaky { color: var(--report); }
+  .label { display: inline-block; border: 1px solid var(--line); border-radius: 3px;
+           padding: 0 .3rem; font-size: .68rem; color: var(--muted); }
+  ul.notes { margin: .25rem 0 .75rem; padding-left: 1.1rem; }
+  ul.notes li { font-size: .8rem; color: var(--muted); margin: .15rem 0; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line);
+           font-size: .75rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>substance report</h1>
+<p class="muted small mono">{{ report.manifest.repo.origin }} @ {{ report.manifest.repo.commit_sha }}</p>
+<p class="muted small">
+  as of {{ report.manifest.as_of }} · run <span class="mono">{{ report.manifest.run_id }}</span>
+  · substance {{ report.manifest.substance_version }}
+</p>
+
+{% if uncalibrated %}
+<div class="banner">
+  <strong>Thresholds uncalibrated.</strong>
+  The cut-offs in <span class="mono">config/thresholds.toml</span> are provisional (ADR-0016).
+  A pass or fail here says what the configured threshold says, not what the benchmark corpus
+  has shown, and any grade derived from it is provisional too.
+</div>
+{% endif %}
+
+<h2>Summary</h2>
+<div class="grid">
+  <div class="cell"><div class="n">{{ counts.pass }}</div><div class="k">pass</div></div>
+  <div class="cell"><div class="n">{{ counts.fail }}</div><div class="k">fail</div></div>
+  <div class="cell"><div class="n">{{ counts.reported }}</div><div class="k">reported</div></div>
+  <div class="cell"><div class="n">{{ counts.absent }}</div><div class="k">not measured</div></div>
+  <div class="cell">
+    <div class="n">{{ report.coverage.checks_measured }}/{{ report.coverage.checks_total }}</div>
+    <div class="k">measured</div>
+  </div>
+</div>
+
+<h3>By axis</h3>
+<table>
+  <thead><tr><th>Axis</th><th>Pass</th><th>Fail</th><th>Reported</th><th>Not measured</th></tr></thead>
+  <tbody>
+  {% for axis in axes %}
+    <tr>
+      <td>{{ axis.name }}</td>
+      <td class="v-pass">{{ axis.pass }}</td>
+      <td class="v-fail">{{ axis.fail }}</td>
+      <td class="v-reported">{{ axis.reported }}</td>
+      <td class="v-not_measured">{{ axis.absent }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3>Hard gates</h3>
+{% if gates %}
+<table>
+  <thead><tr><th>Check</th><th>Target</th><th>Verdict</th></tr></thead>
+  <tbody>
+  {% for gate in gates %}
+    <tr><td class="mono">{{ gate.check_id }}</td><td class="mono">{{ gate.target }}</td>
+        <td class="v-fail">{{ gate.verdict }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted small">No hard gate failed.</p>
+{% endif %}
+
+{% if report.archetype %}
+<h2>Archetype</h2>
+<p><strong>{{ report.archetype }}</strong></p>
+{% if archetype_metrics %}
+<table>
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+  {% for metric in archetype_metrics %}
+    <tr><td class="mono">{{ metric.name }}</td><td class="mono">{{ metric.value }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
+{% if report.provenance %}
+<h2>Provenance <span class="label">not scored</span></h2>
+<p class="muted small">
+  How the code appears to have been written. Reported, never scored, and never used to accuse a
+  person: every declaration below can be stripped, so an absence proves nothing (ADR-0012).
+</p>
+<div class="panel">
+  <p class="small">
+    Declared share of today's blamed lines
+    ({{ report.provenance.lines_blamed }} lines):
+  </p>
+  {% if provenance_tools %}
+  <table>
+    <thead><tr><th>Tool</th><th>Per mille</th><th>Per cent</th></tr></thead>
+    <tbody>
+    {% for tool in provenance_tools %}
+      <tr><td>{{ tool.name }}</td><td class="mono">{{ tool.permille }}</td>
+          <td class="mono">{{ tool.percent }}%</td></tr>
+    {% endfor %}
+      <tr><td class="muted">no declaration</td>
+          <td class="mono">{{ report.provenance.undeclared_permille }}</td>
+          <td class="mono">{{ provenance_undeclared_percent }}%</td></tr>
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted small">No declared tool covers any line.</p>
+  {% endif %}
+
+  {% if provenance_models %}
+  <p class="small">Declared model:</p>
+  <table>
+    <thead><tr><th>Model</th><th>Per mille</th></tr></thead>
+    <tbody>
+    {% for model in provenance_models %}
+      <tr><td>{{ model.name }}</td><td class="mono">{{ model.permille }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if report.provenance.instruction_files %}
+  <p class="small">Instruction files tracked:
+    <span class="mono">{{ report.provenance.instruction_files | join(", ") }}</span>
+  </p>
+  {% endif %}
+
+  {% if report.provenance.knowledge_cutoff %}
+  <p class="small">
+    Knowledge window: <span class="mono">{{ report.provenance.knowledge_cutoff.from }}</span>
+    to <span class="mono">{{ report.provenance.knowledge_cutoff.to }}</span>
+  </p>
+  <ul class="notes">
+    {% for line in report.provenance.knowledge_cutoff.evidence %}<li>{{ line }}</li>{% endfor %}
+  </ul>
+  {% elif report.provenance.knowledge_cutoff_missing %}
+  <p class="small muted">
+    No knowledge window: {{ report.provenance.knowledge_cutoff_missing }}.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+<h2>Findings</h2>
+{% if findings %}
+<table>
+  <thead>
+    <tr><th>Check</th><th>Severity</th><th>Confidence</th><th>Title</th><th>Evidence</th></tr>
+  </thead>
+  <tbody>
+  {% for finding in findings %}
+    <tr>
+      <td class="mono">{{ finding.check_id }}</td>
+      <td>{{ finding.severity }}</td>
+      <td>{{ finding.confidence }}</td>
+      <td><a href="{{ finding.href }}">{{ finding.title }}</a></td>
+      <td>
+        {% for link in finding.evidence %}
+          {% if link.href %}<a href="{{ link.href }}" class="mono">{{ link.text }}</a>{% else %}<span class="mono">{{ link.text }}</span>{% endif %}{% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted small">No findings.</p>
+{% endif %}
+
+<h2>Not measured</h2>
+{% if absent %}
+<table>
+  <thead><tr><th>Check</th><th>Reason</th></tr></thead>
+  <tbody>
+  {% for row in absent %}
+    <tr><td class="mono">{{ row.check_id }}</td><td>{{ row.reason }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted small">Every judging check produced a verdict.</p>
+{% endif %}
+
+{% if report.notes %}
+<h2>Notes</h2>
+<ul class="notes">
+  {% for note in report.notes %}<li>{{ note }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+<h2>Manifest</h2>
+<table>
+  <tbody>
+    <tr><td>commit</td><td class="mono">{{ report.manifest.repo.commit_sha }}</td></tr>
+    <tr><td>origin</td><td class="mono">{{ report.manifest.repo.origin }}</td></tr>
+    <tr><td>as of</td><td class="mono">{{ report.manifest.as_of }}</td></tr>
+    <tr><td>run id</td><td class="mono">{{ report.manifest.run_id }}</td></tr>
+    <tr><td>substance</td><td class="mono">{{ report.manifest.substance_version }}</td></tr>
+    <tr><td>access mode</td><td class="mono">{{ report.manifest.access_mode }}</td></tr>
+    <tr><td>accept exec</td><td class="mono">{{ report.manifest.allow_exec }}</td></tr>
+    <tr><td>repetitions</td><td class="mono">{{ report.manifest.repetitions }}</td></tr>
+    <tr><td>rule pack hash</td><td class="mono">{{ report.manifest.rule_pack_hash }}</td></tr>
+    <tr><td>provenance rules hash</td>
+        <td class="mono">{{ report.manifest.provenance_rules_hash }}</td></tr>
+    <tr><td>thresholds version</td>
+        <td class="mono">{{ report.manifest.thresholds_version }}</td></tr>
+    <tr><td>config hash</td><td class="mono">{{ report.manifest.config_hash }}</td></tr>
+  </tbody>
+</table>
+
+{% if report.manifest.tools %}
+<h3>Tools</h3>
+<table>
+  <thead><tr><th>Tool</th><th>Version</th></tr></thead>
+  <tbody>
+  {% for tool in tools %}
+    <tr><td class="mono">{{ tool.name }}</td><td class="mono">{{ tool.version }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<footer>
+  Report format {{ report.schema_version }}. Provenance is never scored; every other verdict is
+  one check's answer with its metrics beside it. A <span class="mono">not measured</span> verdict
+  means the check could not look, which is not the same as finding nothing.
+</footer>
+
+</body>
+</html>

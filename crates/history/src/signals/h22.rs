@@ -602,6 +602,26 @@ pub fn archetype(input: &HistoryInput, thresholds: &Thresholds) -> Judgment {
     judgment
 }
 
+/// The archetype and the metrics it was read from, for a report that carries both.
+///
+/// The judgment H22 returns holds the metrics as integers and the archetype as an index into
+/// `ARCHETYPES`; a report needs the enum and the numbers beside it, and re-deriving either from
+/// the other would be a second implementation of the same classification.
+#[must_use]
+pub fn classify_report(
+    input: &HistoryInput,
+    thresholds: &Thresholds,
+) -> (Option<Archetype>, ArchetypeMetrics) {
+    let metrics = ArchetypeMetrics::compute(input, &input.test_paths);
+    let unverifiable = unverifiable_reason(input);
+    let classification = classify(
+        &metrics,
+        &thresholds.history().archetypes,
+        unverifiable.as_deref(),
+    );
+    (classification.archetype, metrics)
+}
+
 /// The archetypes in the order the report lists them, matching [`Archetype`]'s variants.
 const ARCHETYPES: &[Archetype] = &[
     Archetype::OneShotDump,

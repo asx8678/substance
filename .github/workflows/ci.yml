@@ -76,3 +76,65 @@ jobs:
       # drift in schemas/ or driver/src/generated/ fails the job.
       - name: C-SCHEMA
         run: cargo run -q -p substance-cli -- schema export --out schemas && git add -N schemas driver/src/generated && git diff --exit-code -- schemas driver/src/generated
+
+  # M1-T12: substance evaluates substance. The job is deliberately narrow — triage only, and
+  # `--fail-on none` — because its purpose is to prove the pipeline runs end to end in CI, not
+  # to gate a merge on substance's own numbers. A failing verdict here would be a finding about
+  # the tool, which belongs in an issue rather than in a red build.
+  dogfood:
+    name: dogfood
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # `fetch-depth: 0` is not an optimisation to skip: triage reads commit history (H01–H22),
+      # so a shallow clone would silently turn most of the history signals into `not_measured`.
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: |
+          rustup show active-toolchain || rustup toolchain install --no-self-update
+          rustc --version
+
+      - name: Cache cargo registry
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      # Only the tools with a confirmed pin in tools.toml are installed. A tool whose pin is
+      # `TBD` (S01's three slop scanners) is left out on purpose: instructing CI to fetch
+      # "latest" would let an unpinned release decide a verdict. Its checks then report
+      # not_measured("tool missing"), which is the honest answer.
+      - name: Install pinned triage tools
+        run: |
+          set -eu
+          # gitleaks 8.30.1 (tools.toml; git ls-remote gitleaks/gitleaks refs/tags/v8.30.1)
+          curl -fsSL -o gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          sudo tar -xzf gitleaks.tar.gz -C /usr/local/bin gitleaks
+          rm gitleaks.tar.gz
+          gitleaks version
+
+      - name: Build
+        run: cargo build --locked -p substance-cli
+
+      - name: substance run (triage only)
+        run: ./target/debug/substance run --triage-only --fail-on none --format json,html .
+
+      # `if: always()` so a run that exits non-zero still leaves its run directory behind:
+      # the report is the evidence, and losing it would make a failed job undiagnosable.
+      - name: Upload the run directory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dogfood-run
+          path: runs/
+          if-no-files-found: warn
+          retention-days: 7

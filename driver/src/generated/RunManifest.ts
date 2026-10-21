@@ -80,6 +80,13 @@ thresholds_version: string,
  */
 scoring_weights_version: string, 
 /**
+ * The provenance rule files hash: `rules/provenance/*.toml` (M1-T11).
+ *
+ * Separate from `rule_pack_hash` because the two answer different questions: the pack is
+ * what judges the code, these describe how it was made.
+ */
+provenance_rules_hash: string, 
+/**
  * The project config's content hash.
  */
 config_hash: string, 

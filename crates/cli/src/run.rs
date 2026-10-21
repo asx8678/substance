@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use substance_orchestrator::{RunError, RunOptions, RunOutcome};
 
 use crate::cli::{Format, RunArgs};
+use crate::error::EXIT_INTERNAL;
 use crate::error::{CliError, EXIT_FAILURE, EXIT_OK};
 use crate::output::stderr_line;
 
@@ -53,13 +54,38 @@ fn finish(args: &RunArgs, outcome: &RunOutcome) -> ExitCode {
     for format in &args.format {
         match format {
             Format::Json => {}
-            Format::Html => stderr_line("html: not implemented yet (M1-T12)"),
+            Format::Html => match substance_report::render(&outcome.report, calibrated()) {
+                Ok(page) => {
+                    let path = outcome.run_dir.join("report.html");
+                    if let Err(error) = std::fs::write(&path, page) {
+                        // A report that could not be written is an internal error, not a verdict:
+                        // exit 3 rather than letting a missing file read as a clean run.
+                        stderr_line(&format!("cannot write {}: {error}", path.display()));
+                        return ExitCode::from(EXIT_INTERNAL);
+                    }
+                }
+                Err(error) => {
+                    stderr_line(&format!("report.html: {error}"));
+                    return ExitCode::from(EXIT_INTERNAL);
+                }
+            },
             Format::Sarif => stderr_line("sarif: not implemented yet (M13-T02)"),
         }
     }
     stderr_line(&summary(outcome));
-    let gates = outcome.gates_hit.len();
-    if args.fail_on.wants_failure(gates) {
+    // A hint or an unconfirmed finding never trips --fail-on: the plan's thresholds are about
+    // confirmed findings, and a hint is a lead rather than a defect.
+    let severities: Vec<substance_core::Severity> = outcome
+        .report
+        .findings
+        .iter()
+        .filter(|finding| !matches!(finding.confidence, substance_core::Confidence::Hint))
+        .map(|finding| finding.severity)
+        .collect();
+    if args
+        .fail_on
+        .wants_failure_for(outcome.gates_hit.len(), &severities)
+    {
         ExitCode::from(EXIT_FAILURE)
     } else {
         ExitCode::from(EXIT_OK)
@@ -99,4 +125,15 @@ fn runtime() -> Result<tokio::runtime::Runtime, CliError> {
         .enable_all()
         .build()
         .map_err(|error| CliError::Internal(format!("cannot start the async runtime: {error}")))
+}
+
+/// Whether the embedded thresholds are calibrated (ADR-0016).
+///
+/// Read from the same embedded file the run used, so the page's banner cannot disagree with the
+/// numbers it is printed beside. A malformed file leaves the banner on: telling a reader the
+/// numbers are provisional is the safe direction when the file cannot be read.
+fn calibrated() -> bool {
+    substance_orchestrator::thresholds::thresholds()
+        .map(|thresholds| thresholds.calibrated)
+        .unwrap_or(false)
 }

@@ -163,6 +163,10 @@
       "description": "Model IDs, empty while the agent layer is off (ADR-0006).",
       "type": "object"
     },
+    "provenance_rules_hash": {
+      "description": "The provenance rule files hash: `rules/provenance/*.toml` (M1-T11).\n\nSeparate from `rule_pack_hash` because the two answer different questions: the pack is\nwhat judges the code, these describe how it was made.",
+      "type": "string"
+    },
     "repetitions": {
       "description": "How many times each action runs; 3, for the 3-of-3 rule.",
       "format": "uint8",
@@ -239,6 +243,7 @@
     "rule_pack_hash",
     "thresholds_version",
     "scoring_weights_version",
+    "provenance_rules_hash",
     "config_hash",
     "allow_exec",
     "egress_enforced",

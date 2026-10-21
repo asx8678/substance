@@ -1028,6 +1028,26 @@ pub enum GateRule {
 }
 
 impl GateRule {
+    /// Whether a check with this rule, and these part verdicts, gates the run.
+    ///
+    /// `Always` gates on the check's own failure, which the caller has already seen. `SubChecks`
+    /// gates only when one of the **named** parts failed: B05's rule names `restart` and
+    /// `redeploy`, so a failing `migrations` part is reported and does not gate. I05 is the same
+    /// shape for `ignored_auth`. A reader of either the exit code or the report's gate list has to
+    /// get this from one place, which is why it is here and not in either caller.
+    #[must_use]
+    pub fn gates(self, parts: &std::collections::BTreeMap<String, crate::model::Verdict>) -> bool {
+        match self {
+            Self::None => false,
+            Self::Always => true,
+            Self::SubChecks(names) => names.iter().any(|name| {
+                parts
+                    .get(*name)
+                    .is_some_and(crate::model::Verdict::is_failure)
+            }),
+        }
+    }
+
     /// The named sub-checks, empty when the rule names none.
     #[must_use]
     pub fn sub_checks(&self) -> &'static [&'static str] {

@@ -87,7 +87,7 @@ pub use h18::star_spikes;
 pub use h19::repo_farms;
 pub use h20::velocity;
 pub use h21::{ScorecardRun, scorecard};
-pub use h22::{ArchetypeMetrics, Classification, archetype, classify};
+pub use h22::{ArchetypeMetrics, Classification, archetype, classify, classify_report};
 pub use shape::{Judgment, Signal, top_commits};
 
 /// The longest window the history checks look back over, in days.
