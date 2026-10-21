@@ -51,6 +51,13 @@ claims_min_active_weeks = 4
 person_day_median_lines = 2000
 person_day_min_active_days = 14
 
+# T06: the share of today's non-test lines that must already exist before the cut-off, and
+# the share of today's test lines that may arrive after it before the check fails. A
+# suite written alongside its code has its test lines spread over the same period as the
+# code; one written afterwards has most of them after the code was finished.
+t06_code_share_permille = 800
+t06_late_tests_permille = 700
+
 # The archetype cut-offs H22 applies, in the plan's order: one-shot dump, burst then
 # abandoned, team maintained, solo maintained, young and iterating. A rule with a missing
 # number cannot match, and H22 names the number it needed.

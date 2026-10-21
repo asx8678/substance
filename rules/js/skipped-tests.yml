@@ -1,0 +1,16 @@
+# T04 skipped and weak tests: JavaScript (M1-T09).
+#
+# The same markers in plain JS, including `xit`, which is the original jasmine/mocha spelling
+# and appears in projects that never moved to a modern runner.
+
+id: js-skipped-test
+language: js
+severity: hint
+message: "skipped test"
+metadata:
+  check_id: T04
+  sub_check: skip-marker
+rule:
+  any:
+    - pattern: $SUITE.skip($$$ARGS)
+    - pattern: xit($$$ARGS)

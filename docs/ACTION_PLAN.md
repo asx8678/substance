@@ -2219,7 +2219,7 @@ Tick each task in the same commit that completes it.
 - [x] M1-T06 H11–H22, archetypes, thresholds
 - [x] M1-T07 Static rule engine
 - [x] M1-T08 S01–S12
-- [ ] M1-T09 D04, O01, O10, T04–T06, L05
+- [x] M1-T09 D04, O01, O10, T04–T06, L05
 - [ ] M1-T10 P01–P07
 - [ ] M1-T11 V01, V03
 - [ ] M1-T12 Report v0 and triage end to end

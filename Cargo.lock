@@ -2222,6 +2222,8 @@ dependencies = [
  "ast-grep-language",
  "serde",
  "serde_json",
+ "serde_yaml_ng",
+ "substance-adapters",
  "substance-core",
  "substance-history",
  "substance-runner",

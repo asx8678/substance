@@ -1,0 +1,18 @@
+# T04 skipped and weak tests: Python (M1-T09).
+#
+# `@pytest.mark.skip` and its `skipif` sibling are decorators, so the rule matches a decorated
+# function rather than a call: the marker is the decorator, and the test is the definition
+# under it.
+
+id: python-skipped-test
+language: python
+severity: hint
+message: "skipped test"
+metadata:
+  check_id: T04
+  sub_check: skip-marker
+rule:
+  kind: decorated_definition
+  has:
+    stopBy: end
+    pattern: $MARK.decorator

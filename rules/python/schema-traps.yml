@@ -1,0 +1,19 @@
+# D04 startup schema traps: Python (M1-T09).
+#
+# SQLAlchemy's `drop_all(` deletes every table; at import time or inside a startup hook it is
+# the Python spelling of "recreate the database on boot". It is legitimate in a test fixture,
+# which is why this is a hint rather than a confirmed finding.
+#
+# `DROP TABLE` as SQL text is not a syntax match — it is a string in any of these languages —
+# so the check looks for it together with the file being startup code
+# (`crates/statics/src/checks/d04.rs`).
+
+id: python-drop-all
+language: python
+severity: warning
+message: "SQLAlchemy drop_all( deletes every table"
+metadata:
+  check_id: D04
+  sub_check: sqlalchemy-drop-all
+rule:
+  pattern: $ENGINE.drop_all($$$ARGS)

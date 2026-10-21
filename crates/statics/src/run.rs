@@ -28,8 +28,9 @@ use substance_runner::tool::ToolRunner;
 use crate::checks::verdict::StaticReport;
 use crate::checks::{
     agent_leftovers, committed_junk, config_contradictions, data_access_sprawl, docs_honesty,
-    escape_hatches, evaluator_manipulation, over_abstraction, scaffold_leftovers, secrets,
-    slop_scan, swallowed_writes,
+    escape_hatches, evaluator_manipulation, fake_ci, llm_keys_in_client, locked_install,
+    over_abstraction, scaffold_leftovers, secrets, skipped_and_weak_tests, slop_scan,
+    startup_schema_traps, swallowed_writes,
 };
 use crate::rulepack::RulePack;
 use crate::scan::{ScanReport, scan};
@@ -116,6 +117,11 @@ pub async fn run_static_checks(
     reports.push(docs_honesty(run_id, &mut tree).await);
     reports.push(over_abstraction(run_id, &mut tree, &scan_report).await);
     reports.push(data_access_sprawl(run_id, &mut tree).await);
+    reports.push(startup_schema_traps(run_id, &mut tree, &scan_report.matches).await);
+    reports.push(locked_install(run_id, &mut tree).await);
+    reports.push(fake_ci(run_id, &mut tree).await);
+    reports.push(skipped_and_weak_tests(run_id, &mut tree, &scan_report.matches).await);
+    reports.push(llm_keys_in_client(run_id, &mut tree).await);
     reports.push(match tools.spec("gitleaks") {
         Some(spec) => secrets(run_id, runner, spec, root).await,
         None => {
@@ -143,7 +149,11 @@ pub async fn run_static_checks(
     });
     reports.push(evaluator_manipulation(run_id, &mut tree).await);
 
-    debug_assert_eq!(reports.len(), 12, "one report per S check");
+    debug_assert_eq!(
+        reports.len(),
+        17,
+        "twelve S checks, D04, O01, O10, T04 and L05"
+    );
     Ok(assemble(reports, &scan_report, pack.len()))
 }
 
@@ -190,14 +200,36 @@ pub fn empty_metrics() -> BTreeMap<String, i64> {
     BTreeMap::new()
 }
 
-/// Whether every S check reported a verdict (used by a caller that checks its own wiring).
+/// Whether every check this pass runs reported a verdict.
+///
+/// The set is the twelve S checks plus the five M1-T09 added; a caller that wires a new one
+/// without adding it here would otherwise believe its own pass covered it.
 #[must_use]
-pub fn covers_all_s(outcome: &StaticOutcome) -> bool {
-    (CheckId::S01 as usize..=CheckId::S12 as usize).all(|index| {
+pub fn covers_all_checks(outcome: &StaticOutcome) -> bool {
+    let expected = [
+        CheckId::D04,
+        CheckId::L05,
+        CheckId::O01,
+        CheckId::O10,
+        CheckId::S01,
+        CheckId::S02,
+        CheckId::S03,
+        CheckId::S04,
+        CheckId::S05,
+        CheckId::S06,
+        CheckId::S07,
+        CheckId::S08,
+        CheckId::S09,
+        CheckId::S10,
+        CheckId::S11,
+        CheckId::S12,
+        CheckId::T04,
+    ];
+    expected.iter().all(|check| {
         outcome
             .verdicts
             .iter()
-            .any(|verdict| verdict.check_id as usize == index)
+            .any(|verdict| verdict.check_id == *check)
     })
 }
 

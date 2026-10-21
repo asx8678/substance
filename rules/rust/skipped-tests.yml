@@ -1,0 +1,15 @@
+# T04 skipped and weak tests: Rust (M1-T09).
+#
+# Rust's skip marker is the `#[ignore]` attribute. A test with it compiles and never runs unless
+# asked for by name, which is the quietest way a suite stops covering something.
+
+id: rust-ignored-test
+language: rust
+severity: hint
+message: "ignored test"
+metadata:
+  check_id: T04
+  sub_check: skip-marker
+rule:
+  kind: attribute_item
+  regex: "#\\[ignore"

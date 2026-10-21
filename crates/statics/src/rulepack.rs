@@ -30,52 +30,88 @@ use crate::lang::{LANGS, Lang};
 /// listed but does not exist fails the build.
 pub const FILES: &[(&str, &str)] = &[
     (
-        "rules/python/swallowed-writes.yml",
-        include_str!("../../../rules/python/swallowed-writes.yml"),
-    ),
-    (
-        "rules/rust/over-abstraction.yml",
-        include_str!("../../../rules/rust/over-abstraction.yml"),
-    ),
-    (
-        "rules/rust/swallowed-writes.yml",
-        include_str!("../../../rules/rust/swallowed-writes.yml"),
-    ),
-    (
-        "rules/ts/over-abstraction.yml",
-        include_str!("../../../rules/ts/over-abstraction.yml"),
-    ),
-    (
-        "rules/ts/swallowed-writes.yml",
-        include_str!("../../../rules/ts/swallowed-writes.yml"),
-    ),
-    (
-        "rules/tsx/over-abstraction.yml",
-        include_str!("../../../rules/tsx/over-abstraction.yml"),
-    ),
-    (
-        "rules/tsx/swallowed-writes.yml",
-        include_str!("../../../rules/tsx/swallowed-writes.yml"),
-    ),
-    (
         "rules/js/escape-hatches.yml",
         include_str!("../../../rules/js/escape-hatches.yml"),
+    ),
+    (
+        "rules/js/schema-traps.yml",
+        include_str!("../../../rules/js/schema-traps.yml"),
+    ),
+    (
+        "rules/js/skipped-tests.yml",
+        include_str!("../../../rules/js/skipped-tests.yml"),
     ),
     (
         "rules/python/escape-hatches.yml",
         include_str!("../../../rules/python/escape-hatches.yml"),
     ),
     (
+        "rules/python/schema-traps.yml",
+        include_str!("../../../rules/python/schema-traps.yml"),
+    ),
+    (
+        "rules/python/skipped-tests.yml",
+        include_str!("../../../rules/python/skipped-tests.yml"),
+    ),
+    (
+        "rules/python/swallowed-writes.yml",
+        include_str!("../../../rules/python/swallowed-writes.yml"),
+    ),
+    (
         "rules/rust/escape-hatches.yml",
         include_str!("../../../rules/rust/escape-hatches.yml"),
+    ),
+    (
+        "rules/rust/over-abstraction.yml",
+        include_str!("../../../rules/rust/over-abstraction.yml"),
+    ),
+    (
+        "rules/rust/skipped-tests.yml",
+        include_str!("../../../rules/rust/skipped-tests.yml"),
+    ),
+    (
+        "rules/rust/swallowed-writes.yml",
+        include_str!("../../../rules/rust/swallowed-writes.yml"),
     ),
     (
         "rules/ts/escape-hatches.yml",
         include_str!("../../../rules/ts/escape-hatches.yml"),
     ),
     (
+        "rules/ts/over-abstraction.yml",
+        include_str!("../../../rules/ts/over-abstraction.yml"),
+    ),
+    (
+        "rules/ts/schema-traps.yml",
+        include_str!("../../../rules/ts/schema-traps.yml"),
+    ),
+    (
+        "rules/ts/skipped-tests.yml",
+        include_str!("../../../rules/ts/skipped-tests.yml"),
+    ),
+    (
+        "rules/ts/swallowed-writes.yml",
+        include_str!("../../../rules/ts/swallowed-writes.yml"),
+    ),
+    (
         "rules/tsx/escape-hatches.yml",
         include_str!("../../../rules/tsx/escape-hatches.yml"),
+    ),
+    (
+        "rules/tsx/over-abstraction.yml",
+        include_str!("../../../rules/tsx/over-abstraction.yml"),
+    ),
+    (
+        "rules/tsx/schema-traps.yml",
+        include_str!("../../../rules/tsx/schema-traps.yml"),
+    ),
+    (
+        "rules/tsx/skipped-tests.yml",
+        include_str!("../../../rules/tsx/skipped-tests.yml"),
+    ),
+    (
+        "rules/tsx/swallowed-writes.yml",
+        include_str!("../../../rules/tsx/swallowed-writes.yml"),
     ),
 ];
 

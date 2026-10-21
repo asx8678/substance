@@ -44,6 +44,8 @@ pub mod h20;
 pub mod h21;
 pub mod h22;
 pub mod shape;
+pub mod t05;
+pub mod t06;
 
 use std::collections::BTreeMap;
 
@@ -891,6 +893,8 @@ pub fn signals() -> Vec<Signal> {
         Signal::new(CheckId::H20, velocity),
         Signal::new(CheckId::H21, scorecard),
         Signal::new(CheckId::H22, archetype),
+        Signal::new(CheckId::T05, t05::judge),
+        Signal::new(CheckId::T06, t06::late_test_batches),
     ]
 }
 

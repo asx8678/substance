@@ -85,6 +85,12 @@ pub struct HistoryThresholds {
     pub person_day_median_lines: Option<u32>,
     /// H20: how many active days it takes before that median is worth reading.
     pub person_day_min_active_days: Option<u32>,
+    /// T06: the share of today's non-test lines that must already exist before the cut-off
+    /// instant, in permille.
+    pub t06_code_share_permille: Option<u32>,
+    /// T06: the share of today's test lines that may arrive after that instant before the
+    /// check fails, in permille.
+    pub t06_late_tests_permille: Option<u32>,
     /// H22: the archetype cut-offs.
     #[serde(default)]
     pub archetypes: ArchetypeThresholds,

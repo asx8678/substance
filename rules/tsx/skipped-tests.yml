@@ -1,0 +1,16 @@
+# T04 skipped and weak tests: TSX (M1-T09).
+#
+# The same skip markers in .tsx. A component's test file is frequently .tsx rather than .ts,
+# so leaving it out would undercount exactly the tests a React project has.
+
+id: tsx-skipped-test
+language: tsx
+severity: hint
+message: "skipped test"
+metadata:
+  check_id: T04
+  sub_check: skip-marker
+rule:
+  any:
+    - pattern: $SUITE.skip($$$ARGS)
+    - pattern: xit($$$ARGS)

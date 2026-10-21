@@ -1,0 +1,42 @@
+# D04 startup schema traps: JavaScript (M1-T09).
+#
+# The catalog names two TypeScript syntax traps and one manifest string. These are the two
+# syntax traps; `prisma db push` lives in package.json, Procfile and Dockerfile text, so it is a
+# check (`crates/statics/src/checks/d04.rs`) rather than a rule.
+#
+# Why it matters: TypeORM's `synchronize: true` and Sequelize's `sync({ force: true })` both
+# drop and recreate tables on every boot. In production that is data loss on the first restart,
+# and a template that ships either one hides it in a datasource file nobody reads.
+#
+# Two separate rules, because they are two different techniques with two different fixes.
+# `force: true` is scoped to a `sync(...)` call: `{ force: true }` appears in plenty of
+# innocuous objects (a `git push --force` helper, a CLI flag struct), and reporting those would
+# make the check's findings worth ignoring. `stopBy: end` is required for `has` to search
+# through the argument object's members rather than only its own node.
+
+id: js-typeorm-synchronize
+language: js
+severity: warning
+message: "TypeORM synchronize: true rewrites the schema on every boot"
+metadata:
+  check_id: D04
+  sub_check: typeorm-synchronize
+rule:
+  kind: pair
+  regex: ^synchronize\b
+
+---
+
+id: js-sequelize-force-sync
+language: js
+severity: warning
+message: "Sequelize sync({ force: true }) drops every table on boot"
+metadata:
+  check_id: D04
+  sub_check: sequelize-force-sync
+rule:
+  kind: call_expression
+  has:
+    stopBy: end
+    kind: pair
+    regex: ^force\b

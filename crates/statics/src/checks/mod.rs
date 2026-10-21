@@ -18,6 +18,10 @@
 //! reports `Reported` (ADR-0013): the numbers are measured and shown, and the check neither
 //! passes nor fails until the benchmark corpora set a cut-off.
 
+pub mod d04;
+pub mod l05;
+pub mod o01;
+pub mod o10;
 pub mod s01;
 pub mod s02;
 pub mod s03;
@@ -30,8 +34,13 @@ pub mod s09;
 pub mod s10;
 pub mod s11;
 pub mod s12;
+pub mod t04;
 pub mod verdict;
 
+pub use d04::startup_schema_traps;
+pub use l05::llm_keys_in_client;
+pub use o01::locked_install;
+pub use o10::fake_ci;
 pub use s01::slop_scan;
 pub use s02::escape_hatches;
 pub use s03::swallowed_writes;
@@ -44,4 +53,5 @@ pub use s09::over_abstraction;
 pub use s10::data_access_sprawl;
 pub use s11::secrets;
 pub use s12::evaluator_manipulation;
+pub use t04::skipped_and_weak_tests;
 pub use verdict::StaticReport;
