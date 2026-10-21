@@ -7,6 +7,7 @@
 pub mod check;
 pub mod clock;
 pub mod config;
+pub mod deps;
 pub mod hash;
 pub mod ids;
 pub mod model;

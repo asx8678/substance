@@ -1,3 +1,6 @@
 //! Stack and database adapters, lockfile parsers and route tables.
 //!
-//! Scaffold only: the module tree stays empty until this crate's tasks land.
+//! M1-T04 lands [`deps`]: one parser per lockfile format, all producing
+//! [`substance_core::deps::Dependency`].
+
+pub mod deps;

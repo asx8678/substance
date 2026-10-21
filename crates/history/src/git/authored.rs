@@ -31,20 +31,11 @@ pub const GENERATED_MARKER_LINES: usize = 5;
 /// counts say nothing about the code. `Cargo.lock` is included even for applications,
 /// where the plan's rule about committing it is the opposite, because the question here is
 /// authorship, not policy.
-pub const LISTED_LOCKFILES: &[&str] = &[
-    "bun.lockb",
-    "Cargo.lock",
-    "composer.lock",
-    "Gemfile.lock",
-    "go.sum",
-    "npm-shrinkwrap.json",
-    "package-lock.json",
-    "pnpm-lock.yaml",
-    "poetry.lock",
-    "pubspec.lock",
-    "uv.lock",
-    "yarn.lock",
-];
+///
+/// The list is [`substance_core::deps::LOCKFILES`], the same one the lockfile parsers use
+/// (M1-T04): one list, so a file cannot be a lockfile for the dependency report and code
+/// for the authored-line count.
+pub use substance_core::deps::LOCKFILES as LISTED_LOCKFILES;
 
 /// Directory names whose contents are never authored.
 const GENERATED_DIRS: &[&str] = &[

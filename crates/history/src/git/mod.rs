@@ -62,6 +62,8 @@ pub enum GitCommand {
     CheckAttr,
     /// `git check-mailmap`.
     CheckMailmap,
+    /// `git cat-file`.
+    CatFile,
 }
 
 impl GitCommand {
@@ -75,6 +77,7 @@ impl GitCommand {
             Self::ListTree => "git ls-tree",
             Self::CheckAttr => "git check-attr",
             Self::CheckMailmap => "git check-mailmap",
+            Self::CatFile => "git cat-file",
         }
     }
 }
@@ -173,7 +176,11 @@ impl GitRepo {
     ///
     /// `-c core.quotePath=false` keeps non-ASCII paths literal instead of C-quoted, so a
     /// path in the output is the path on disk; `--no-pager` stops git from trying to page.
-    async fn run(&self, command: GitCommand, args: &[OsString]) -> Result<String, GitError> {
+    pub(crate) async fn run(
+        &self,
+        command: GitCommand,
+        args: &[OsString],
+    ) -> Result<String, GitError> {
         let mut full: Vec<OsString> = vec![
             OsString::from("-c"),
             OsString::from("core.quotePath=false"),
@@ -206,7 +213,7 @@ impl GitRepo {
     }
 
     /// Wraps a parser failure in a [`GitError`].
-    fn parse_error(&self, command: GitCommand, failure: ParseFailure) -> GitError {
+    pub(crate) fn parse_error(&self, command: GitCommand, failure: ParseFailure) -> GitError {
         GitError::Parse {
             command: command.as_str(),
             path: self.root.clone(),
