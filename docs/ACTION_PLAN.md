@@ -2204,7 +2204,7 @@ Tick each task in the same commit that completes it.
 
 - [x] M0-T01 Workspace scaffold
 - [x] M0-T02 ADRs
-- [ ] M0-T03 Core IDs and registry
+- [x] M0-T03 Core IDs and registry
 - [ ] M0-T04 Core data model
 - [ ] M0-T05 Project config
 - [ ] M0-T06 CLI skeleton
