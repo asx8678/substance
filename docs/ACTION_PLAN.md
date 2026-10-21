@@ -19,15 +19,16 @@ Contents: 1 Rules · 2 Owner decisions · 3 Plan review · 4 Architecture change
    - This doesn't conflict with T01–T03 or `bench/`. Those are product features that make substance run *the evaluated app's* tests and a benchmark, and they are code you write.
    - Wherever you would normally write a test for an invariant, use a compile-time assertion instead: `const _: () = assert!(…);`.
 3. **Allowed commands:**
-   - Cargo: `cargo fmt`, `check`, `clippy`, `build`, `add`, `metadata`, `tree`.
+   - Cargo: `cargo fmt`, `check`, `clippy`, `build`, `add`, `metadata`, `tree`, `generate-lockfile`, and `cargo run -q -p substance-cli -- <subcommand>` for the substance subcommands listed below.
    - In `driver/`: `npm ci`, `npm install`, `npm run typecheck`, `npm run lint`, `npm run build`.
    - Git and search: `git status`, `diff`, `add`, `commit`; `rg`, `grep`, `find`, `jq`.
    - substance subcommands that inspect without evaluating: `--help`, `schema export`, `schema validate`, `checks list`, `doctor`.
+   - Not allowed: `npx` (it can download packages at run time) and scaffolders (`npm create`, `npm init`, `uv init`). Scripts that need them, such as `scripts/scaffold-hashes.sh` (M1-T08), are written by you and run by the owner (§8).
 4. **Dependencies:**
    - Add them with `cargo add <crate>` or `npm install --save-exact <pkg>`. Never type a version number by hand.
    - Before calling a crate API, confirm it in the docs for the version you added (docs.rs). Never guess method names.
 5. **Commits:** one per task, with the message `<task id>: <summary> [<check IDs>]`, for example `M1-T05: commit-history signals [H01 H02 H03 H04 H05 H06 H07 H08 H09 H10]`. In the same commit, tick the task in §9.
-6. **Check IDs are stable.** Use them in code (`CheckId::H03`), in reports and in commit messages. Never rename, renumber or reuse one.
+6. **Check IDs are stable.** Use them in code (`CheckId::H03`), in reports and in commit messages. Never rename, renumber or reuse one. From M1-T12 on, a task that flips a check to `implemented` also adds its arm to `handler_for` and runs `C-IMPL` with its IDs.
 7. **When the plan and this file are silent,** choose the more deterministic option and write an ADR using the template from M0-T02. ADR numbers 0001–0026 are reserved by this file; new ones start at 0027.
 8. **Stop and report instead of improvising** when:
    - an external tool's flags or output differ from what a task says;
@@ -47,12 +48,12 @@ Tasks refer to these by name.
 | --- | --- | --- |
 | C-RUST | `cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo build --workspace --locked` | exit 0 |
 | C-AGENT | `cargo clippy -p substance-agent --features agent --locked -- -D warnings` | exit 0 |
-| C-SCHEMA | `cargo run -q -p substance-cli -- schema export --out schemas && test -z "$(git status --porcelain -- schemas driver/src/generated)"` | exit 0: the regenerated files equal the committed ones, and none are untracked |
+| C-SCHEMA | `cargo run -q -p substance-cli -- schema export --out schemas && git add -N schemas driver/src/generated && git diff --exit-code -- schemas driver/src/generated` | exit 0: the regenerated files equal the staged ones, and none are untracked |
 | C-GUARD | `scripts/guards.sh` | exit 0: no tests, no wall clock, no unseeded randomness, no HashMap or HashSet |
 | C-TS | `npm --prefix driver ci && npm --prefix driver run typecheck && npm --prefix driver run lint` | exit 0 (from M3 on) |
-| C-IMPL `<IDs>` | `cargo run -q -p substance-cli -- checks list --json --status implemented > target/impl.json` then `jq -r '.[] \| select(.handler) \| .id' target/impl.json` and `jq '[.[] \| select(.handler \| not)] \| length' target/impl.json` | the first lists every given ID; the second prints `0` (from M6-T00 on) |
+| C-IMPL `<IDs>` | `cargo run -q -p substance-cli -- checks list --json --status implemented > target/impl.json` then `jq -r '.[] \| select(.handler) \| .id' target/impl.json` and `jq '[.[] \| select(.handler \| not)] \| length' target/impl.json` | the first lists every given ID; the second prints `0` (from M1-T12 on) |
 
-Run C-SCHEMA after any change to a type in `crates/core`, and commit the regenerated `schemas/` and `driver/src/generated/` first; C-SCHEMA fails on uncommitted output.
+Run C-SCHEMA after any change to a type in `crates/core`. Stage the regenerated `schemas/` and `driver/src/generated/` (`git add`) first; they go into the task's single commit (rule 5). C-SCHEMA compares the working tree with the index, so it fails on unstaged or untracked output. In CI the index equals HEAD, so the same command catches uncommitted drift.
 
 ---
 
@@ -104,6 +105,34 @@ These issues came up while checking the plan. Each fix is built into the tasks i
 | 22 | S11 is listed for M1, but its "keys in built bundles" part needs a build, the same split L05 already has | "Check catalog: static, test and dependency checks" | The tree and history part goes in M1; the bundle part in M4 (M4-T04) |
 | 23 | The plan's acceptance criteria and engineering conventions depend on tests: round-trip tests, oracle golden tests, probe integration tests, benchmark gates and double-run diffs in CI | "Milestones"; "Engineering conventions" | Replaced by build, lint, codegen and guard checks; test work listed in §7; owner runs in §8 |
 | 24 | Dogfooding: substance judges its own repo, and with no tests it will flag T01 against itself | "Engineering conventions" | Expected. The CI dogfood job reports but doesn't gate (M1-T12) |
+| 25 | No login mechanism: the crawler, B10, B14, B24, B33 and the `existing` account mode all need a logged-in session, but nothing defines how to log in | whole plan; this file | `[login]` config (M0-T05), driver `login` command (M3-T01), login detection and verification by effect (M4-T01) |
+| 26 | The archetype rules use undefined metrics (`big_bang`, `active_days`, `edit_share`, `test_lines_change_with_code`, `maintainers`), and "Solo: answers issues" was dropped | M1-T06 | Metric definitions and a `solo` response condition (M1-T06) |
+| 27 | Missing dependencies: H13 and H14 need registries (M1-T04), T06 needs `thresholds.toml` (M1-T06), and H17 needs S04's scaffold hashes (M1-T08) | §6 | Depends fixed; H17's scaffold match moves to M1-T08 |
+| 28 | C-SCHEMA required committed output while rule 5 allows one commit per task | §1 | C-SCHEMA compares against the index (§1) |
+| 29 | `--forge-snapshot` replayed only `forge/`; registry data and network-dependent tools (osv-scanner, scorecard) were fetched live again. A snapshot flag in the manifest would also change `run_id` and every finding ID | M1-T01; §8 | `--snapshot-from <run_dir>` covers forge, registry and network tools, and is kept out of the manifest (M1-T01) |
+| 30 | Wall-time budgets (blame, triage, requests) make verdicts depend on machine speed, breaking "same input, same verdict" | §4.3 | Count budgets decide; wall time is only a safety cap, noted in the report when it fires (§4.3, ADR-0009) |
+| 31 | The dogfood job's shallow checkout makes intake exit 2, and `tools.toml` has no exact version for CI to install | M0-T09; M1-T12 | `fetch-depth: 0`; a `pin` field in `tools.toml` (M1-T01, M1-T12) |
+| 32 | Crawl-judged checks (B01, B31 and other `OracleOnly` checks) bypass the 3-of-3 rule | M4-T02 | Confirmation replays of failing crawl records (M4-T02) |
+| 33 | `canonical_json` relied on serde_json's `preserve_order` staying off, which any dependency can switch on through feature unification | M0-T03 | Explicit recursive key sort (M0-T03) |
+| 34 | ts-rs maps 64-bit integers to `bigint`, which `JSON.parse` never produces; seeds above 2⁵³ lose precision | M0-T04 | Seeds as strings; bounded integers as `number` (M0-T04, M0-T07) |
+| 35 | libfaketime restarts the clock at `as_of` in every child process (npm → node) | M3-T06 | `FAKETIME_DONT_RESET=1` (M3-T06, M8-T05) |
+| 36 | `setrlimit` from a crate only limits substance itself; limiting a child needs `pre_exec`, which `unsafe_code = "forbid"` rules out | M2-T01 | `prlimit` wrapper, Linux only (M2-T01) |
+| 37 | O03 and O07 measured the `npm start` wrapper's PID, not the server | M2-T05; M8-T08 | Measure the whole process group (M2-T05, M8-T08) |
+| 38 | `pg_stat_statements_reset()` is server-wide (it breaks parallel runs on a shared database) and needs extra privileges | M3-T03 | Before/after delta filtered by `dbid` (M3-T03) |
+| 39 | `NODE_V8_COVERAGE` is per process, so "files hit during DB-writing actions" can't be read from one coverage run | M10-T01 | Differential coverage: boot-only run vs. write-actions run (M10-T01) |
+| 40 | The AppModel was cached by commit SHA only, ignoring config, seed and driver version | M4-T01 | Full cache key (M4-T01) |
+| 41 | gitleaks reads the repo's own config and ignore files, so a hostile repo can allowlist its own secrets | M1-T08 | substance's own gitleaks config; repo ignores disabled (M1-T08) |
+| 42 | The handler table arrived in M6-T00, after M1–M4 checks already ran end to end through some other dispatch | M6-T00 | `handler_for` and C-IMPL start in M1-T12; M4-T02 adds probe variants |
+| 43 | Many H checks have no threshold, so "pass otherwise" made them always pass | M1-T05; M1-T06 | New verdict `reported`: metrics only, neither pass nor fail (M0-T04, ADR-0013) |
+| 44 | Commands the plan needs were missing from the allowed list (`cargo generate-lockfile`, `cargo run`), and S04's template hashes need scaffolders | §1; M1-T08 | Allowed list extended; scaffold hashes come from an owner-run script (§1, M1-T08, §8) |
+| 45 | Level table contradictions: O01 was both L0 and L1; the reserved V02 fell under "V checks" | M0-T03 | O01 is L1; reserved IDs have no level (M0-T03) |
+| 46 | Python install commands: `uv sync --frozen` differs from the plan's locked install (`--locked`); `poetry install --sync` is deprecated in Poetry 2 | M11-T01 | `uv sync --locked`; `poetry sync` (M11-T01) |
+| 47 | `npx stryker run` may download packages at run time | M10-T03 | Stryker from PATH at a pinned version (M10-T03) |
+| 48 | B24's `dst` instant uses Los Angeles rules, but the browser context was fixed to UTC | M8-T05 | `dst` runs in `America/Los_Angeles` (M8-T05) |
+| 49 | B33 `cross_user_rows` sent only the anon key, so the request ran as `anon`, not as user B | M6-T11 | `apikey` plus `Authorization: Bearer <B's token>` (M6-T11) |
+| 50 | B05's `redeploy` ran the full boot plan, which reseeds the database | M6-T02 | Redeploy skips seed and accounts (M6-T02) |
+| 51 | O01, S11 and L05 were marked implemented while parts of them arrive later | M1-T08; M1-T09 | Per-part verdicts in `CheckVerdict.parts` (M0-T04, M0-T08) |
+| 52 | The example `substance.toml` had one user, while ADR-0019 requires two per role | M0-T05 | Second user in the example (M0-T05) |
 
 ---
 
@@ -173,6 +202,10 @@ These issues came up while checking the plan. Each fix is built into the tasks i
 - **Randomness:** only `rand_chacha::ChaCha8Rng::seed_from_u64(seed)`. Each generator gets its own seed, derived as `sha256(master_seed, generator_name)` and stored in the manifest.
 - **No floats in records or reports:** durations in ms, sizes in bytes, ratios in permille (`u32`).
 - **Normalized form:** the normalized form of an EffectRecord omits `id` and `timing.settle_ms`. Normalized JSON is canonical JSON: keys sorted, no insignificant whitespace.
+- **Budgets:** limits that can change a verdict are counts, applied in sorted order: `blame_max_files`, `forge_max_requests`, `crawl_max_*`, `probe_max_targets`. The same input then hits the same limit on any machine.
+  - Wall-time budgets (`triage_s`, `run_s`, per-stage timeouts) are safety caps only.
+  - When one fires, the affected checks report `not_measured("budget exhausted")`, and the report adds the note `time cap hit: <stage>; this result depends on machine speed`.
+  - The "same input, same verdict" guarantee covers runs where no time cap fired.
 
 ---
 
@@ -267,14 +300,15 @@ exit $fail
     - 0006 Agent layer off
     - 0007 License undecided
     - 0008 No tests by owner instruction, listing everything in §7
-    - 0009 Determinism rules in code (§4.3)
+    - 0009 Determinism rules in code (§4.3), including count budgets vs. wall-time caps
     - 0010 Severity and level defaults (the tables in M0-T03)
     - 0011 Axis assignment for unassigned checks (M0-T03)
     - 0012 Slop label: family = ID prefix; hints count; a slop label needs fails from at least 2 families among B I D O L S T P H; V, A and G never count
     - 0013 Verdict semantics:
       - `not_measured`: the check couldn't run or lacked an input (missing tool, adapter or permission; a crash; disabled; out of budget).
       - `unverifiable`: the check ran, but the evidence can't decide. Example: H01 with commit dates that predate the repo.
-      - Neither counts as pass, and both carry a reason.
+      - `reported`: the check ran and recorded metrics, but has no threshold yet (uncalibrated or context-only, such as H19). It is neither pass nor fail, counts as measured for coverage, and never lowers a grade.
+      - Neither `not_measured` nor `unverifiable` counts as pass, and both carry a reason.
     - 0014 `Measured<T>` channels in EffectRecord, a deviation from the plan's JSON sample
   - Later tasks add 0015–0024.
 - **Outcome:** 15 files in `docs/decisions/`.
@@ -287,7 +321,7 @@ exit $fail
   - `crates/core/src/ids.rs`:
     - newtypes `RunId`, `RecordId`, `FindingId` and `SnapshotId` over `String`, each with `derive(parts: &[&[u8]]) -> Self` as in §4.3;
     - `BlobRef`, holding `sha256:<hex>`.
-  - `crates/core/src/hash.rs`: sha256 and base32 helpers, and `canonical_json<T: Serialize>(&T) -> Vec<u8>`. It serializes to `serde_json::Value`, whose objects are BTreeMaps as long as serde_json's `preserve_order` feature is off; check with `cargo tree -e features`.
+  - `crates/core/src/hash.rs`: sha256 and base32 helpers, and `canonical_json<T: Serialize>(&T) -> Vec<u8>`. It serializes to `serde_json::Value`, then writes it with its own recursive writer that sorts every object's keys by their UTF-8 bytes. It must not rely on serde_json's map order: any dependency can turn on `preserve_order` through feature unification.
   - `crates/core/src/clock.rs`: the only wall-clock access in the workspace, `pub fn wall_now_utc() -> Timestamp`. `Timestamp` is a newtype over the `time` crate's `OffsetDateTime`, serialized as RFC 3339 UTC with whole seconds.
   - `crates/core/src/check.rs`:
     - `enum CheckId` with every ID, serialized as its string (`"B01"`): B01–B33, I01–I04, D01–D04, O01–O11, L01–L05, S01–S12, T01–T06, P01–P07, H01–H22, V01–V03, A01–A05, G01–G02. That's 114 IDs. Also `const COUNT: usize = 114`.
@@ -325,7 +359,7 @@ exit $fail
 
 | Level | Checks |
 | --- | --- |
-| L0 | H, S, P and V checks; T04–T06; D01, D02, D04; O01's static part; O08, O09, O10 |
+| L0 | H, S, P and V checks (not the reserved V02); T04–T06; D01, D02, D04; O08, O09, O10 |
 | L1 | O01, O02, O04, O05, T01–T03 |
 | L2 | D03 |
 | L3 | O03, O06, O07, O11 |
@@ -396,9 +430,12 @@ In v1 the level is recorded but doesn't gate anything, because only repo mode ex
     - `Finding { id, check_id, sub_check: Option<String>, severity, confidence, title, target, evidence: Vec<Evidence>, replay: String, cause: Option<Cause>, related: Vec<FindingId> }`.
     - `Evidence` variants: record, blob, commit, file_range, forge_object, registry_object, tool_output, note.
   - `verdict.rs`:
-    - `Verdict`: pass, fail, flaky, not_measured{reason}, unverifiable{reason}.
+    - `Verdict`: pass, fail, flaky, reported, not_measured{reason}, unverifiable{reason} (ADR-0013).
     - `Target` variants: repo, file, route, screen, control, endpoint, table, dependency.
-    - `CheckVerdict { check_id, target, verdict, finding_ids, metrics: BTreeMap<String, i64> }`.
+    - `CheckVerdict { check_id, target, verdict, finding_ids, metrics: BTreeMap<String, i64>, parts: BTreeMap<String, Verdict> }`. `parts` holds per-part verdicts for checks built in stages (O01, S11, L05) and is empty otherwise.
+  - **64-bit integers:** ts-rs maps `u64` and `i64` to `bigint`, which `JSON.parse` never produces.
+    - Seeds and any value that can exceed 2⁵³ serialize as decimal strings (`#[serde(with = …)]` plus `#[ts(type = "string")]`).
+    - Bounded values (ms, bytes, counts, permille) use `u32`, or `#[ts(type = "number")]` when they need 64 bits.
   - `app_model.rs`: `AppModel`, as in the plan. Users carry role and handle only, never secrets.
   - `manifest.rs`: `RunManifest` with the plan's fields plus:
     - `schema_version`, `substance_version`, `run_id`, `repo { origin, commit_sha }`;
@@ -450,6 +487,17 @@ email = "a@example.test"
 password_env = "SUBSTANCE_USER_A_PASSWORD"   # secrets only by env var name
 create = "api"                # api | sql | supabase | ui | existing
 
+[[users]]
+role = "user"
+handle = "user_b"
+email = "b@example.test"
+password_env = "SUBSTANCE_USER_B_PASSWORD"
+create = "api"
+
+[login]                       # M4-T01; omit it to detect a single password form
+ui = { path = "/login", identifier = "input[name=email]", password = "input[type=password]", submit = "button[type=submit]" }
+# or: api = { method = "POST", path = "/api/login", body = '{"email":"{email}","password":"{password}"}' }
+
 [signup]
 api = { method = "POST", path = "/api/users", body = '{"user":{"email":"{email}","password":"{password}","username":"{handle}"}}' }
 
@@ -476,6 +524,8 @@ shutdown_grace_s = 30
 crawl_max_screens = 200
 crawl_max_actions = 2000
 crawl_max_depth = 6
+blame_max_files = 5000
+forge_max_requests = 3000
 
 [checks]
 disable = []                  # reported as not_measured("disabled by config")
@@ -492,7 +542,7 @@ disable = []                  # reported as not_measured("disabled by config")
 
 ```text
 substance run <REPO> [--rev <sha>] [--out <dir>] [--as-of <rfc3339>] [--seed <u64>] [--config <path>]
-                     [--triage-only] [--allow-exec] [--forge-snapshot <dir>]
+                     [--triage-only] [--allow-exec] [--snapshot-from <run_dir>]
                      [--format json,html,sarif] [--fail-on gate|critical|high|none]
 substance replay <RECORD_OR_FINDING_ID> --run <dir>
 substance bench [--suite <dir>] [--runs <n>] [--baseline <file>]
@@ -523,7 +573,7 @@ substance doctor [--json]
   - Output must be byte-stable: sorted keys, pretty-printed, trailing newline.
   - `schema validate` validates a JSON or TOML file with the `jsonschema` crate and prints each error with its JSON pointer.
 - **Outcome:** `schemas/` and `driver/src/generated/` are committed and reproducible.
-- **Checks:** C-SCHEMA. `cargo run -q -p substance-cli -- schema validate --kind effect-record schemas/examples/effect-record.json` exits 0.
+- **Checks:** C-SCHEMA. `cargo run -q -p substance-cli -- schema validate --kind effect-record schemas/examples/effect-record.json` exits 0. `rg -n 'bigint' driver/src/generated` prints nothing.
 
 #### M0-T08 Orchestrator skeleton, run directory, report.json v0
 
@@ -559,6 +609,7 @@ app_model.json  crawl.har  spec/        # M4, M7
 ```
 
   - Every `planned` or `implemented` check that doesn't run gets a not_measured verdict with a reason: `not implemented (M4)`, `needs --allow-exec`, `tool missing: gitleaks`, `disabled by config` or `budget exhausted`. Reserved and support IDs get no verdict.
+  - Checks built in parts (O01, S11, L05) report each part not built yet in `parts` as `not_measured("not implemented (Mx)")`. Overall verdict: `fail` if any part fails, else `not_measured` if any part is, else `pass`.
   - `crates/report` writes `report.json` as canonical JSON, pretty-printed.
 - **Outcome:** the run pipeline exists, and every v1 check has a not_measured path from day one (principle 8).
 - **Checks:** C-RUST, C-SCHEMA.
@@ -583,17 +634,26 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 
 - **Depends:** M0-T08 · **Read:** "Determinism engineering" (history snapshots, pinned versions)
 - **Do:**
-  - `tools.toml` at the repo root. Each `[tools.<name>]` entry has `bin`, `version_args`, `min_version`, `checks = [...]` and `exec_repo_code = bool`.
+  - `tools.toml` at the repo root. Each `[tools.<name>]` entry has:
+    - `bin` and `version_args`;
+    - `min_version`, the floor that `doctor` checks, and `pin`, the exact version CI installs;
+    - `checks = [...]`;
+    - `exec_repo_code = bool`;
+    - `network = bool`, true when the tool's output depends on online data (osv-scanner, scorecard, `npm audit`, `cargo audit`, pip-audit).
   - `crates/runner/src/tool.rs`: `run_tool(name, args, cwd, timeout) -> Result<ToolOutput, ToolError>`.
     - The version is captured once per run and written to the manifest.
-    - stdout and stderr go to blobs.
+    - stdout and stderr go to blobs. An index entry `tools/<name>/<sha256(args with paths relative to the repo root)>.json` points at them.
     - A missing binary returns `ToolError::Missing`, and the caller reports not_measured.
     - A tool with `exec_repo_code = true` requires `&ExecPermit`.
     - git already goes through `run_tool_capture` (M0-T08). List `git` in `tools.toml` so its version is recorded too.
   - `crates/history/src/snapshot.rs`: `SnapshotHttp`, wrapping `reqwest` with rustls.
     - Every request and response is saved as `forge/<sha256(method+url+body)>.json` or under `registry/`, together with `as_of`. Auth headers are never saved.
-    - `--forge-snapshot <dir>` serves only from saved responses, without network. A missing entry makes the check not_measured.
-    - Retries use a fixed backoff (no jitter), and each run has a request budget.
+    - `--snapshot-from <run_dir>` replays an earlier run's external data without network:
+      - `forge/` and `registry/` responses;
+      - the saved outputs of every `network = true` tool, which is then not executed.
+      A missing entry makes the check not_measured.
+    - The flag is not part of the manifest, so `run_id`, finding IDs and `report.json` stay identical. It is recorded in `runs/<run_id>/invocation.json`, which no hash covers.
+    - Retries use a fixed backoff (no jitter). Each run stops after `forge_max_requests` requests, issued in a fixed order (§4.3).
   - All "last N days" windows are computed from `manifest.as_of`.
 - **Outcome:** external data is replayable from disk, and tool versions are recorded.
 - **Checks:** C-RUST, C-SCHEMA.
@@ -606,7 +666,7 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
   - `hunks(sha)`: parse `git show -U0 --no-color -M -C <sha>`. H08, H09 and T05 use this.
   - `blame(path)`: parse `git blame -w -M -C --line-porcelain <sha> -- <path>` into a map from line to (commit, author, author time).
     - Run it in parallel over authored files with a bounded worker pool (number of CPUs).
-    - It is budget-aware and records blamed-line coverage.
+    - It blames at most `blame_max_files` files, in sorted path order, and records blamed-line coverage.
   - `authored.rs` excludes these from authored lines:
     - lockfiles, from a list;
     - paths with `linguist-generated` or `linguist-vendored`, via `git check-attr`;
@@ -668,7 +728,8 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
   - Implement each signal as a triage check in `crates/history/src/signals/`. Each one writes integer metrics to `CheckVerdict.metrics`, and the top 20 contributing commits as evidence.
   - Verdict:
     - `fail` when its threshold from M1-T06's file is crossed;
-    - `pass` otherwise;
+    - `pass` when below the threshold;
+    - `reported` when the check has no key in `thresholds.toml` (metrics only, until calibrated; ADR-0013);
     - `not_measured` when an input is missing;
     - `unverifiable` where the formula says so.
   - Formulas:
@@ -691,7 +752,7 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 
 #### M1-T06 History signals H11–H22, archetypes, thresholds (ADR-0016)
 
-- **Depends:** M1-T05 · **Read:** "Repo history and vitality" (the whole section, including false positives)
+- **Depends:** M1-T05, M1-T04 · **Read:** "Repo history and vitality" (the whole section, including false positives)
 - **Do:**
 
 | ID | Formula |
@@ -702,13 +763,30 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 | H14 | Outside issue authors whose accounts were 180+ days old when they opened the issue (cap 50 user lookups); deps.dev dependents; registry downloads |
 | H15 | Fail when the repo has at least 3 issues and only the owner or author accounts ever opened or commented on them |
 | H16 | CHANGELOG versions (`## [x.y.z]` or `## x.y.z`) with no tag or release; README badges pointing at workflow files that don't exist, or static `img.shields.io/badge/` images claiming build or coverage; "production-ready", "battle-tested" or "enterprise-grade" with active weeks below threshold |
-| H17 | When `template_repository` is set: permille of files whose blob SHA equals the template's (via the API's recursive tree). Also matches against the S04 scaffold hashes |
+| H17 | When `template_repository` is set: permille of files whose blob SHA equals the template's (via the API's recursive tree). The match against S04's scaffold hashes is added in M1-T08 |
 | H18 | Days with 50+ stars where at least 50% of the stargazers' accounts were under 30 days old (cap 200 lookups). Never a positive signal |
 | H19 | Repos the owner created in the 30 days around this repo's creation. Context only; info |
 | H20 | Authored lines per active person-day, where a person-day is a distinct (author, UTC date) |
 | H21 | `scorecard --repo=github.com/<o>/<r> --format=json` from PATH (needs `GITHUB_AUTH_TOKEN`). Import Maintained, Code-Review, Contributors, Branch-Protection, CI-Tests, Dangerous-Workflow and Pinned-Dependencies as 0–10 integers |
 | H22 | Archetype: H01 unverifiable → Unverifiable history. Otherwise the first match in this order: One-shot dump, Burst then abandoned, Team maintained, Solo maintained, Young and iterating. No match → `unclassified`. The report shows the metrics that triggered it |
 
+  - Archetype metrics. Each is computed once, stored in H22's metrics, and taken from the check named:
+
+    | Metric | Definition |
+    | --- | --- |
+    | `age_days` | `as_of` − the first non-bot commit (or the first public push, under the private-then-public rule), in days |
+    | `big_bang` | H03's permille |
+    | `active_weeks_90`, `active_weeks_365` | H02 |
+    | `active_days` | distinct UTC dates with a non-bot commit, over the repo's life |
+    | `edit_share` | permille of non-bot commits after day one that delete or change at least one existing authored line (numstat deleted > 0) |
+    | `test_lines_change_with_code` | permille of non-bot commits changing authored non-test files that also change test files. Test paths come from `rules/history/test-paths.txt` (`tests/`, `__tests__/`, `*.test.*`, `*.spec.*`, `test_*.py`, `*_test.py`) |
+    | `outside_issue_authors` | distinct non-bot issue authors whose `author_association` isn't OWNER, MEMBER or COLLABORATOR |
+    | `bus_factor` | H11 |
+    | `maintainers` | H11's distinct non-bot humans who merged a PR in the last 365 days |
+    | `reviewed_prs` | H12's permille |
+    | `answers_issues` | true when H13's median first response is ≤ `solo_max_response_hours` (default 168), or when there were no outsider issues in the last 365 days |
+
+    A condition on a not_measured metric is false. When no rule matches only because of that, the result is `unclassified`, with a note naming the metric.
   - False positives, from the plan:
     - **Squash merges:** if at least 70% of merged PRs were squashed, H02 and H04 use PR dates and sizes.
     - **Forks:** exclude commits reachable from upstream, using the forge compare API.
@@ -721,7 +799,7 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 | `one_shot` | big_bang ≥ 700‰ AND active_weeks_365 ≤ 3 AND outside_issue_authors = 0 |
 | `burst_abandoned` | age ≥ 120 days AND active_weeks_90 = 0 |
 | `young_iterating` | age < 90 days AND active_days ≥ 15 AND edit_share ≥ 400‰ AND test_lines_change_with_code ≥ 300‰ |
-| `solo` | active_weeks_90 ≥ 2 AND bus_factor = 1 |
+| `solo` | active_weeks_90 ≥ 2 AND bus_factor = 1 AND answers_issues |
 | `team` | maintainers ≥ 2 AND reviewed_prs ≥ 500‰ |
 | H04 | giant commit = 1,000 lines; fail when share_from_giant ≥ 500‰ |
 | H05 | fail when p90 ≥ 100 lines/min |
@@ -757,14 +835,14 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 | S01 | Run aislop, antislop and AI-SLOP Detector, whichever are on PATH (confirm their flags with `--help`), and parse their output. None present → not_measured |
 | S02 | `rules/{ts,rust,python}/escape-hatches.yml` with the catalog's patterns. Rust `unwrap()`/`expect()` count only inside functions that take Axum or Actix extractor parameters. Metric: count per 1,000 authored lines |
 | S03 | Rules for: TS DB-client calls (insert, update, delete, create, upsert, save, execute, query) that aren't under `await`, `return` or `.then`; Rust `let _ = $Q.execute($$$)`; Python `except: pass` in a `try` that calls `commit()` |
-| S04 | `rules/scaffolds.toml`: sha256 of files from official templates (create-vite, create-next-app, uv init), downloaded at a recorded version, plus the catalog's text markers (`vite-project`, "Add your description here", `Vite + React + TS`, `[year] [fullname]`) |
+| S04 | `rules/scaffolds.toml`: sha256 of files from official templates (create-vite, create-next-app, uv init) at a recorded version, written by `scripts/scaffold-hashes.sh`. You write the script; the owner runs it (§8). Until then the file holds only the text markers, and the hash part is `not_measured` in `parts`. Also add H17's match against these hashes. Plus the catalog's text markers (`vite-project`, "Add your description here", `Vite + React + TS`, `[year] [fullname]`) |
 | S05 | The catalog's filename patterns: report-style markdown in the root, one-off scripts, duplicate versions |
 | S06 | Tracked paths under `node_modules/`, `target/`, `__pycache__/` or `dist/`, plus `.env` (not `.env.example`) and `.DS_Store` |
 | S07 | Two configs for one tool (for example `.eslintrc*` alongside `eslint.config.*`); `"strict": false` in tsconfig; `#![allow(warnings)]` in a crate root; dependency sets that differ between `pyproject.toml`, `setup.py` and `requirements.txt` |
 | S08 | Commands in README `sh`/`bash`/`shell`/`console` blocks that don't exist (npm, pnpm or yarn scripts; make and just targets; cargo bins; referenced paths). Environment variables read in code (`process.env.X`, `import.meta.env.X`, `os.environ[...]`, `os.getenv`, `std::env::var`, `env!`) but missing from the README and `.env.example` |
 | S09 | TS interfaces or abstract classes with exactly one `implements`; Rust traits with exactly one `impl … for`; functions whose body only returns a call with the same arguments |
 | S10 | Number of files importing a DB client (prisma, drizzle, knex, typeorm, pg, sqlx, diesel, sea_orm, sqlalchemy, django.db, psycopg) |
-| S11 | `gitleaks git` (full history) and `gitleaks dir` (tree), JSON report. Evidence keeps rule, file, line, commit and fingerprint only, never the secret. Confirmed. The bundle part is in M4-T04 |
+| S11 | `gitleaks git` (full history) and `gitleaks dir` (tree), JSON report. Evidence keeps rule, file, line, commit and fingerprint only, never the secret. Run gitleaks with substance's own config (`rules/gitleaks.toml`, gitleaks' default rules at the pinned version) and with the repo's `.gitleaks.toml` and `.gitleaksignore` disabled, so a repo can't allowlist its own secrets. Confirm the flags with `--help`, and stop and report if repo ignores can't be disabled. Confirmed. The bundle part is in M4-T04 |
 | S12 | Patterns from `rules/evaluator-manipulation.txt` in README, comments, HTML and markdown: text addressed to AI reviewers, evaluators, graders or "language models", "ignore previous instructions", requests for a high score or rating, hidden HTML comments addressed to an assistant. Confirmed |
 
 - **Outcome:** S01–S12 are implemented, apart from S11's bundle part.
@@ -772,7 +850,7 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 
 #### M1-T09 Other triage checks: D04, O01 (static), O10, T04–T06, L05 (repo)
 
-- **Depends:** M1-T07, M1-T04 · **Read:** the D04, O01, O10, T04–T06 and L05 rows
+- **Depends:** M1-T07, M1-T04, M1-T06 · **Read:** the D04, O01, O10, T04–T06 and L05 rows
 - **Do:**
 
 | ID | Implementation |
@@ -829,7 +907,12 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
 - **Do:**
   - `--triage-only` runs intake, then the triage checks, then the report.
     - Independent checks run concurrently, but their results are sorted before writing.
-    - When the budget runs out, the remaining checks report `not_measured("budget exhausted")`.
+    - When the triage time cap (`triage_s`) fires, the remaining checks report `not_measured("budget exhausted")`, and the report adds the time-cap note (§4.3).
+  - `crates/orchestrator/src/handlers.rs`:
+    - `pub enum Handler { Triage(TriageFn) }`; M4-T02 adds the probe variants.
+    - `pub fn handler_for(id: CheckId) -> Option<Handler>`, written as one exhaustive `match` over `CheckId`, filled for every check implemented in M1.
+    - The orchestrator dispatches checks only through `handler_for`.
+  - `checks list --json` adds `"handler": true|false` per entry. C-IMPL applies from this task on.
   - `report.html` v0 is built with minijinja from templates in `crates/report/templates/`, embedded via `include_str!`. It is self-contained: inline CSS, no JavaScript, no CDN. Sections:
     - summary: verdict counts per axis, hard gates hit;
     - archetype with its metrics;
@@ -839,11 +922,12 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
     - the manifest.
   - Exit code follows `--fail-on`.
   - CI: add a `dogfood` job.
-    - It installs the M1 tools from `tools.toml`, each at a pinned version.
+    - It checks out with `actions/checkout` and `fetch-depth: 0`, because intake refuses shallow repos.
+    - It installs the M1 tools from `tools.toml`, each at its `pin` version.
     - It runs `substance run --triage-only --fail-on none --format json,html .` and uploads `runs/` as an artifact.
     - No `continue-on-error`; O10 would flag it.
 - **Outcome:** triage works end to end on a repo, without executing repo code.
-- **Checks:** C-RUST, C-SCHEMA. `rg -n '<script|https?://' crates/report/templates` prints nothing.
+- **Checks:** C-RUST, C-SCHEMA, `C-IMPL` with every M1 ID. `rg -n '<script|https?://' crates/report/templates` prints nothing.
 
 ### M2 Runner and boot (host processes)
 
@@ -860,7 +944,8 @@ Plan target: under 2 minutes after cloning, and the same `as_of` snapshot gives 
   - `wait_ready`: HTTP GET on `ready_path` until a status below 500 comes back, or the budget runs out.
   - `stop(grace)`: SIGTERM to the group, wait, then SIGKILL.
   - `ServiceProcess::spawn(spec)` for substance's own long-running helpers (the driver, Mailpit, Toxiproxy): the same process-group, log and stop handling, optional piped stdin and stdout, and no `ExecPermit`.
-  - Stage budgets; `setrlimit` limits via a safe crate, best effort.
+  - Stage budgets (safety caps, §4.3).
+  - Resource limits, Linux only: repo-controlled commands are wrapped as `prlimit --as=<bytes> --nofile=<n> --nproc=<n> -- <cmd>` (util-linux, listed in `tools.toml`). Elsewhere no limits are applied, and the report notes it. `setrlimit` from a crate only limits substance itself, and `pre_exec` needs `unsafe`.
 - **Outcome:** repo code can only run through `ExecPermit`, and every process starts from `crates/runner`.
 - **Checks:** C-RUST, C-GUARD (its process-spawning guard from M0-T08 covers this).
 
@@ -934,7 +1019,7 @@ pub trait StackAdapter: Send + Sync {
     - `api`: the `[signup]` request template;
     - `sql`;
     - `supabase`: the GoTrue admin API with the local service key;
-    - `existing`;
+    - `existing`: the account must already exist after seeding; M4-T01 verifies it by logging in;
     - `ui`: implemented in M4.
   - Verification emails go through Mailpit once M3 exists.
   - Generated data uses seeded generators. Canary values for B13 are derived from the seed and written to `canaries.json`.
@@ -951,7 +1036,7 @@ pub trait StackAdapter: Send + Sync {
 | --- | --- |
 | O01 | Exit status of the locked install in a fresh working copy |
 | O02 | Outcome of the README rung, plus the friction log |
-| O03 | SIGTERM to the app's group. Pass when it exits within the grace period with code 0 or 143 |
+| O03 | SIGTERM to the app's group. Pass when every process in the group has exited within the grace period and the group leader's exit code is 0 or 143. A wrapper such as `npm start` exiting while its child lives on fails |
 | O04 | Run the migrate command a second time; fail on a non-zero exit |
 | O05 | No container, so a static check (ADR-0020): fail when the final stage of a repo Dockerfile has no `USER`, or runs as `root` or `0`. No Dockerfile → not_measured |
 
@@ -997,6 +1082,11 @@ pub trait StackAdapter: Send + Sync {
   - **WebSocket** frames (direction and payload hash). Dialogs are auto-dismissed and recorded; downloads are saved as blobs.
   - **`route`:** `context.route` with the modes `fail_500`, `abort` and `delay`.
   - **`clock`:** `context.clock.install({ time })`, which keeps advancing, and `fastForward`.
+  - **`login`** (add the variant to `DriverCommand` in core first, then run C-SCHEMA):
+    - `{ mode: "ui", path, identifier, password, submit, email, password_value }` fills and submits the form;
+    - `{ mode: "api", method, path, body }` sends the request with `page.request`, so cookies land in the context.
+    - It returns the auth cookies and storage keys that changed.
+    - The password never appears in events or logs. The login request body is stored as a blob whose password value is replaced with `<redacted>`.
   - **`snapshot_dom`:** the normalized body HTML → sha256, plus a visible-text map.
   - **`axe`, `layout`, `trace`** as in the plan.
 - **Outcome:** the driver builds and type-checks against the generated types.
@@ -1025,7 +1115,7 @@ pub trait StackAdapter: Send + Sync {
 | Channel | Implementation |
 | --- | --- |
 | DB rows | Postgres: `pg_logical_slot_get_changes` after settle; parse wal2json v2 or test_decoding output into per-table insert, update and delete counts, plus a canonical rows blob. SQLite: online backup before and after, then `sqldiff` from PATH, parsed into counts |
-| Query count | `pg_stat_statements_reset()` before the action; after settle, `sum(calls)` filtered by the app database's `dbid`. substance's own queries run over an admin connection to the `postgres` database, so they aren't counted. SQLite → `not_measured("sqlite: v1")` |
+| Query count | `sum(calls)` from `pg_stat_statements`, filtered by the app database's `dbid`, read before the action and after settle; the count is the difference. No reset: a reset is server-wide and would break parallel runs. If `pg_stat_statements_info.dealloc` changed between the two reads (entries were evicted), the channel is `not_measured("pg_stat_statements evicted")`. substance's own queries run over an admin connection to the `postgres` database, so they aren't counted. SQLite → `not_measured("sqlite: v1")` |
 | Server logs | Slice the log files by byte offsets between action start and settle. Error lines are counted with `rules/log-errors.toml`: level fields, `Traceback`, `panicked at`, unhandled rejections |
 | Egress, email | From M3-T04 |
 
@@ -1067,7 +1157,7 @@ pub trait StackAdapter: Send + Sync {
 - **Depends:** M3-T02 · **Read:** "Determinism engineering" (freeze the inputs)
 - **Do:**
   - Browser: install the clock at `as_of`; context `timezoneId: "UTC"`, `locale: "en-US"`.
-  - Server, on Linux with libfaketime: `LD_PRELOAD=<path>/libfaketime.so.1` and `FAKETIME="@<as_of>"`. The `@` (start-at) form keeps time advancing. Then `server_clock: fixed_start`.
+  - Server, on Linux with libfaketime: `LD_PRELOAD=<path>/libfaketime.so.1`, `FAKETIME="@<as_of>"` and `FAKETIME_DONT_RESET=1`. The `@` (start-at) form keeps time advancing, and `FAKETIME_DONT_RESET` stops each child process (npm → node) from restarting the clock at `as_of`. Then `server_clock: fixed_start`.
   - Elsewhere: `server_clock: real`, and server-clock parts such as B24's report not_measured.
   - Always: `TZ=UTC`, `LANG=en_US.UTF-8`, `LC_ALL=en_US.UTF-8`.
 - **Outcome:** inputs are fixed and recorded in the manifest.
@@ -1092,6 +1182,10 @@ pub trait StackAdapter: Send + Sync {
 - **Depends:** M3-T07, M2-T04 · **Read:** "Core data model" (AppModel), "Determinism engineering" (stable selectors)
 - **Do:**
   - BFS from `/`, and from each role's post-login landing page.
+  - **Login** (used here and by B10, B14, B24, B33 and the `existing` account mode):
+    - From `[login]` when configured. Otherwise, the first screen in frontier order with exactly one visible password input and one submit control in the same form becomes the `ui` login.
+    - Success is judged by effect, not by words: an auth cookie or storage key appears, no error signal shows, and the landing page has no password input.
+    - Without a working login, every check that needs a session reports `not_measured("no working login")`.
   - Frontier order: (depth, normalized route, control order).
   - Route templates: numeric, UUID and digit-bearing segments become `:id`.
   - Per screen, `list_controls`. Actions are sorted by (role, accessible name, selector).
@@ -1101,7 +1195,7 @@ pub trait StackAdapter: Send + Sync {
   - Budgets come from `[budgets]`.
   - Every crawl action produces an EffectRecord.
   - Selectors: role plus accessible name, then test ID, then CSS. A selector that stops matching triggers re-exploration of that screen, never a failure.
-  - Outputs: `app_model.json` (screens, controls, forms, request map, entities from JSON arrays of objects with IDs, tables touched) and `crawl.har`. The AppModel is cached per commit SHA.
+  - Outputs: `app_model.json` (screens, controls, forms, request map, entities from JSON arrays of objects with IDs, tables touched) and `crawl.har`. The AppModel is cached per (commit SHA, `config_hash`, `master_seed`, `rule_pack_hash`, driver package version, Playwright version).
   - The `ui` signup method from M2-T04 is implemented here.
 - **Outcome:** an AppModel and crawl records.
 - **Checks:** C-RUST, C-SCHEMA.
@@ -1122,6 +1216,8 @@ pub trait StackAdapter: Send + Sync {
     - 0 fails → `pass`;
     - mixed → `flaky` (reported separately);
     - any not_measured → `not_measured`.
+  - Crawl-judged checks (`OracleOnly`, such as B01 and B31) see each target only once, in the crawl. When a crawl record fails, the orchestrator replays its `setup` and `action` 2 more times on fresh snapshots (M3-T07's replay path) and applies the same aggregation. A target that passes in the crawl needs no replay.
+  - Add the `Probe(&'static dyn Probe)` and `OracleOnly(&'static dyn Oracle)` variants to `Handler` (M1-T12).
   - Static hints on the same file or route attach as `cause`, for example S03 on a B02 or B03 finding.
 - **Outcome:** a pure judging layer and the reproduction rule.
 - **Checks:** C-RUST. `cargo tree -p substance-oracles --depth 1 -e normal` lists only `substance-core`, `serde`, `serde_json` and `regex`.
@@ -1230,10 +1326,7 @@ Every task's checks: C-RUST, C-GUARD, C-SCHEMA and `C-IMPL <IDs>`. Task-specific
 - **Depends:** M4-T04 · **Read:** §4.2 of this file
 - **Do:**
   - `crates/orchestrator/src/handlers.rs`:
-    - `pub enum Handler { Triage(TriageFn), Probe(&'static dyn Probe), OracleOnly(&'static dyn Oracle) }`, where `OracleOnly` covers oracles that judge crawl records with no probe of their own, such as B01.
-    - `pub fn handler_for(id: CheckId) -> Option<Handler>`, written as one `match` over `CheckId`.
-    - Fill it for every check implemented in M1–M4.
-  - `checks list --json` adds `"handler": true|false` per entry.
+    - `handler_for` and the `handler` field already exist (M1-T12, M4-T02). Confirm that every check implemented in M1–M4 has an arm, and add any that are missing.
   - Add to `[budgets]` in `ProjectConfig` and `docs/substance.example.toml`: `probe_max_targets = 20`.
   - Add `pub fn select_targets<T: Ord>(candidates: Vec<T>, cap: u32) -> (Vec<T>, u32)` to `crates/probes/src/targets.rs`. It sorts, truncates and returns the skipped count.
   - C-IMPL (defined in §1) uses the `handler` field.
@@ -1275,7 +1368,7 @@ Every task's checks: C-RUST, C-GUARD, C-SCHEMA and `C-IMPL <IDs>`. Task-specific
     2. `reload`
     3. `new_context`: same user, fresh browser context.
     4. `restart`: runner stop, then start the same build.
-    5. `redeploy`: fresh working copy, full boot plan, same database.
+    5. `redeploy`: fresh working copy, then install, build, migrate and start against the same database. No seed or account step.
   - A rung passes when the marker is visible again on that screen. Stop at the first failure.
   - **Oracle:** fail with `sub_check` set to the first failing rung. The registry's `GateRule` makes `restart` and `redeploy` gates.
 - **Outcome:** B05 is implemented.
@@ -1421,7 +1514,7 @@ Every task's checks: C-RUST, C-GUARD, C-SCHEMA and `C-IMPL <IDs>`. Task-specific
   | `rls_disabled` | `SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity` |
   | `permissive_policy` | `pg_policies` rows in `public` where `roles` includes `anon` or `authenticated`, and `qual` or `with_check` is `true` |
   | `service_key_exposed` | reuse M4-T04's bundle finding |
-  | `cross_user_rows` | sign in as B through GoTrue (`/auth/v1/token?grant_type=password`), then `GET /rest/v1/<table>?select=*` with the anon key for each public table. Fail when rows contain A's canaries |
+  | `cross_user_rows` | sign in as B through GoTrue (`/auth/v1/token?grant_type=password`), then `GET /rest/v1/<table>?select=*` for each public table, with headers `apikey: <anon key>` and `Authorization: Bearer <B's access_token>`. Fail when rows contain A's canaries |
 
   The anon key comes from `supabase status -o json`.
 - **Outcome:** B33 is implemented.
@@ -1622,10 +1715,10 @@ The owner's acceptance runs for M7 use TS apps only (review issue 21).
   - **Instants,** each a `sub_check`:
     - `token_expiry`: a JWT `exp` found in cookies or storage, plus 1 minute; skipped when no JWT is found;
     - `new_year`: the next 1 January at 00:00:30 UTC;
-    - `dst`: the next DST switch for `America/Los_Angeles`, plus 1 hour;
+    - `dst`: the next DST switch for `America/Los_Angeles`, plus 1 hour. This instant runs in a context with `timezoneId: "America/Los_Angeles"`, and with `TZ=America/Los_Angeles` for the server part;
     - `leap_day`: 2028-02-29T12:00:00Z.
   - **Steps:** log in, open the screens visited after login, fast-forward the browser clock with `clock` `fastForward`, and reload each screen.
-  - **Server clock:** only when `server_clock = fixed_start`. Restart the app with `FAKETIME="@<instant>"`; otherwise the server part is not_measured.
+  - **Server clock:** only when `server_clock = fixed_start`. Restart the app with `FAKETIME="@<instant>"` and `FAKETIME_DONT_RESET=1`; otherwise the server part is not_measured.
   - **Fails on:** 5xx, an empty visible text, a page error, or landing on a login screen. Exception: for `token_expiry`, a redirect to login with no error is a pass.
 - **Outcome:** B24 is implemented.
 - **Checks:** standard, C-IMPL B24.
@@ -1666,8 +1759,8 @@ The owner's acceptance runs for M7 use TS apps only (review issue 21).
   - **Action:** the first GET page in the crawl's sorted order. Repeat it 1,000 times with the shared HTTP client, not the browser.
   - **Sample every 100 repetitions:**
     - `pg_stat_activity` connections to the app database;
-    - the app process's open file descriptors: `/proc/<pid>/fd` on Linux, `lsof -p <pid>` via `run_tool` elsewhere;
-    - RSS via `ps -o rss= -p <pid>`.
+    - open file descriptors summed over every process in the app's process group (PIDs from `pgrep -g <pgid>`): `/proc/<pid>/fd` on Linux, `lsof -p <pid>` via `run_tool` elsewhere;
+    - RSS summed over the same PIDs, via `ps -o rss= -p <pid,…>`. Measuring only the leader would measure the `npm start` wrapper.
   - **Fail when** a metric rises strictly across the last 5 samples and the last sample is over 1.5× the first. Each metric is a `sub_check`.
 - **Outcome:** O07 is implemented.
 - **Checks:** standard, C-IMPL O07.
@@ -1841,7 +1934,11 @@ This milestone makes substance run *the evaluated app's* tests. It adds no tests
 - **Do:**
   - **TS apps:** start with `NODE_V8_COVERAGE=<run>/coverage/raw`. After a graceful stop (needed to flush the data), run `c8 report --temp-directory <raw> --reporter=json --report-dir <run>/coverage` from PATH; confirm the flags.
   - Map paths to the working copy and drop files that aren't authored.
-  - **Core files:** files hit during crawl actions that wrote to the DB. Write them to `coverage/core_files.json`.
+  - **Core files** are found by differential coverage, because `NODE_V8_COVERAGE` covers a whole process, not one action:
+    - run (a): boot, `wait_ready`, graceful stop;
+    - run (b): boot, replay the crawl records that wrote to the DB (`setup` plus `action`), graceful stop;
+    - core files are authored files with at least one function whose hit count in (b) exceeds (a), using c8's JSON (istanbul `f` counts).
+    - Write them to `coverage/core_files.json`.
   - **Report coverage:** `coverage.server_code` = covered ÷ authored server lines, in permille.
   - Python is added in M11-T01. Rust is `not_measured("rust coverage: v1")`.
 - **Outcome:** a coverage map for T02 and the report.
@@ -1888,7 +1985,7 @@ This milestone makes substance run *the evaluated app's* tests. It adds no tests
     - `testRunner` = jest or vitest (confirm the runner plugins);
     - `reporters: ["json"]`, `concurrency: 2`;
     - `timeoutMS` from the budget.
-  - Run `npx stryker run`; needs `ExecPermit`.
+  - Run `stryker run` from PATH: `@stryker-mutator/core` plus the jest or vitest runner plugin, at the versions pinned in `tools.toml`. Never `npx`, which can download at run time. Needs `ExecPermit`.
   - Parse `reports/mutation/mutation.json` (the mutation-testing-elements schema). Score = killed ÷ (killed + survived + timeout), in permille.
   - Fail when the score is below `t02_min_score_permille` (default 600).
   - Out of budget → not_measured, with the partial score as a metric.
@@ -1918,8 +2015,8 @@ This milestone makes substance run *the evaluated app's* tests. It adds no tests
 - **Do:**
   - **Detection:** `pyproject.toml` or requirements dependencies on fastapi, django, flask or streamlit.
   - **Install:**
-    - `uv sync --frozen` when `uv.lock` exists;
-    - `poetry install --sync` when `poetry.lock` exists (confirm the flag);
+    - `uv sync --locked` when `uv.lock` exists (the plan's locked install, which O01 measures);
+    - `poetry sync` when `poetry.lock` exists, or `poetry install --sync` on Poetry 1.x, chosen by `poetry --version`;
     - otherwise `python -m venv .venv`, then `.venv/bin/pip install -r requirements.txt`.
   - **Start:**
 
@@ -1993,7 +2090,7 @@ Nothing to build beyond M0's stub crate. UI-level B08 reports `not_measured("nee
     - `Report` gains `scores: Vec<AxisScore>` and `summary: Summary`.
   - **`config/weights.toml`:** severity → grade (`critical = "F"`, `high = "D"`, `medium = "C"`, `low = "B"`) and `low_confidence_below_permille = 500`. Its sha256 becomes `scoring_weights_version`.
   - **Grades:** each axis grade is the worst grade among its confirmed failures; A when there are none.
-    - Flaky findings and hints never lower a grade.
+    - Flaky findings, hints and `reported` verdicts never lower a grade. `reported` counts as measured for coverage.
     - Coverage = measured ÷ v1 checks of the axis.
     - Provenance is never scored, and Generic isn't scored in v1.
   - **Gates:** from `GateRule`. `--fail-on gate` exits 1 when `gates_hit` isn't empty.
@@ -2049,7 +2146,7 @@ Nothing to build beyond M0's stub crate. UI-level B08 reports `not_measured("nee
 - **Do:**
   - Every finding's `replay` = `substance replay <fnd_id> --run <dir>`.
   - **Behavioral findings:** replay the first record (M3-T07).
-  - **Static, history and dependency findings:** re-run that check's handler (`handler_for`) at the same commit, with `--forge-snapshot <dir>/forge`. Exit 0 when the same finding ID is produced again, 1 otherwise.
+  - **Static, history and dependency findings:** re-run that check's handler (`handler_for`) at the same commit, with `--snapshot-from <dir>`. Exit 0 when the same finding ID is produced again, 1 otherwise.
   - `replay` also accepts `--all`, which replays every finding and prints a table.
 - **Outcome:** every finding is reproducible.
 - **Checks:** C-RUST.
@@ -2085,7 +2182,8 @@ These are the plan's acceptance criteria, as commands the owner runs after a mil
 | M | Run | Expect |
 | --- | --- | --- |
 | M0 | `substance schema validate --kind effect-record schemas/examples/effect-record.json`, then run C-SCHEMA twice | Valid; no diff |
-| M1 | `time substance run --triage-only --as-of 2026-10-01T00:00:00Z <public GitHub repo>`, then rerun with `--forge-snapshot <first run>/forge` and `diff` the two `report.json` | Under 2 min after cloning; identical reports |
+| M1 (before) | `scripts/scaffold-hashes.sh`, then commit `rules/scaffolds.toml` | S04's hash part and H17's scaffold match become measured |
+| M1 | `time substance run --triage-only --as-of 2026-10-01T00:00:00Z <public GitHub repo>`, then rerun with `--snapshot-from <first run dir>` and `diff` the two `report.json` | Under 2 min after cloning; identical reports, provided no time cap fired |
 | M2 | `SUBSTANCE_PG_ADMIN_URL=… substance run --allow-exec <RealWorld TS clone>` | Boots from a clean clone; O01–O05 verdicts present; reset works per probe |
 | M3 | `substance replay <rec_id> --run <dir>`, twice | Exit 0; byte-identical normalized records |
 | M4 | Full run on unmodified RealWorld TS | Zero findings for B01–B04, B18, B19, B28–B31 and L05 |
