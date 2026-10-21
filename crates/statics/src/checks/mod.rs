@@ -21,6 +21,7 @@
 pub mod d04;
 pub mod l05;
 pub mod o01;
+pub mod o05;
 pub mod o10;
 pub mod s01;
 pub mod s02;
@@ -40,6 +41,7 @@ pub mod verdict;
 pub use d04::startup_schema_traps;
 pub use l05::llm_keys_in_client;
 pub use o01::locked_install;
+pub use o05::non_root;
 pub use o10::fake_ci;
 pub use s01::slop_scan;
 pub use s02::escape_hatches;

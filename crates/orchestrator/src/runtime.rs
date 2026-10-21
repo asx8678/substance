@@ -45,6 +45,7 @@ use substance_adapters::accounts::{
     AccountError, AccountPlan, SignupRequest, password_for, render,
 };
 use substance_adapters::boot::BootEnv;
+use substance_adapters::boot::StepFact;
 use substance_adapters::db::cleanup::DatabaseCleanup;
 use substance_adapters::db::factory::{self, Adapter, FactoryError};
 use substance_adapters::ladder::{self, BootedApp};
@@ -54,8 +55,9 @@ use substance_adapters::ts::package_manager;
 use substance_core::config::{ProjectConfig, UserConfig, UserCreate};
 use substance_core::ids::RunId;
 use substance_core::model::seeding::{Canaries, Canary, seeds_for};
-use substance_core::model::{BootOutcome, CanaryKind, CommandSpec, DbHandle};
+use substance_core::model::{BootOutcome, BootRung, CanaryKind, CommandSpec, DbHandle};
 use substance_core::tools::ToolSpec;
+use substance_runner::ExitInfo;
 use substance_runner::{Budget, ExecPermit, Limits, Registrar};
 
 /// The label the seed snapshot carries.
@@ -82,6 +84,13 @@ const STOP_GRACE: Duration = Duration::from_secs(10);
 
 /// How long the whole stage may take, in seconds.
 const STAGE_CAP_S: u64 = 3600;
+
+/// How long the README trial may take, separately from the stage (M2-T05).
+///
+/// Its own cap because it is a second boot inside one stage: a README that starts a dev server and
+/// never answers would otherwise eat the whole stage's budget and leave the checks after it
+/// unmeasured. A quarter of the stage's cap, which is enough for an install and a start.
+const README_CAP_S: u64 = 900;
 
 /// How long a signup request may take.
 ///
@@ -126,6 +135,38 @@ pub struct RuntimeOutcome {
     pub notes: Vec<String>,
     /// The generator seeds this stage used, for the manifest.
     pub seeds: BTreeMap<String, u64>,
+    /// Every one-shot step the boot ran: install, build, migrate and seed.
+    ///
+    /// O01's exec part reads the install step from here, and O04 the migrate step. Recorded even
+    /// when the boot failed, because a failed install is exactly what O01 has to see.
+    pub steps: Vec<StepFact>,
+    /// What the stop observed when the app's group was signalled, for O03.
+    ///
+    /// `None` when the app was never stopped by this stage, which is `not_measured`: a token this
+    /// run did not produce is not evidence about this run's shutdown.
+    pub shutdown: Option<ExitInfo>,
+    /// What the README rung did when it was tried on its own, for O02.
+    ///
+    /// `None` means there was no README rung to try, which is `not_measured`. `Some(Ok(()))` means
+    /// the documented setup booted the app; `Some(Err(reason))` means it did not, and the reason is
+    /// the evidence.
+    pub readme: Option<Result<(), String>>,
+    /// Whether the migrate command survived a second run, for O04.
+    ///
+    /// `None` when no migrate command ran successfully the first time: there is then nothing to
+    /// re-run, and the check says so rather than passing.
+    pub second_migrate: Option<MigrateRun>,
+}
+
+/// One re-run of the migrate command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrateRun {
+    /// Whether it exited 0.
+    pub success: bool,
+    /// Its exit code, absent when a signal ended it.
+    pub code: Option<i32>,
+    /// The command, for the message.
+    pub command: String,
 }
 
 impl RuntimeOutcome {
@@ -189,6 +230,10 @@ pub async fn run(input: &RuntimeInput<'_>) -> Result<RuntimeOutcome, String> {
     let Some(mut booted) = boot(input, permit, &env, &mut outcome).await else {
         return Ok(outcome);
     };
+
+    // O04 before anything writes to the database: the migrate command's second run is judged on
+    // the state the first one left, and a seed would be a second writer in between.
+    outcome.second_migrate = migrate_twice(input, permit, &env, &outcome.steps).await;
 
     let Some((adapter, handle)) = database else {
         // No database: no seed, no accounts, no snapshot. The app still stops here, because a
@@ -365,7 +410,23 @@ async fn boot(
     .await
     {
         Ok(booted) => {
+            let readme_booted = booted.outcome.rung == Some(BootRung::Readme);
             outcome.boot = Some(booted.outcome);
+            // Recorded before the app is unpacked: a boot that got as far as its steps and then
+            // failed to start still has an install outcome, and O01 must see it.
+            outcome.steps = booted.steps;
+            // O02 asks the README on its own, because the ladder stops at the first rung that works:
+            // a repository with a good config never reaches rung 1, and the check would be
+            // unmeasurable in exactly the case it exists for.
+            if !readme_booted {
+                outcome.readme = ladder::try_readme(
+                    &repo,
+                    &boot_env,
+                    Budget::after("readme", Duration::from_secs(README_CAP_S)),
+                    permit,
+                )
+                .await;
+            }
             let app = booted.app?;
             // Registered as soon as it exists. `forget_app` after a clean stop is what keeps a later
             // Ctrl-C from signalling a pid the OS may have given to something else.
@@ -402,8 +463,11 @@ async fn stop(
 ) -> Option<substance_runner::StoppedApp> {
     let group = booted.pgid();
     match booted.stop(STOP_GRACE).await {
-        Ok(token) => {
+        Ok((info, token)) => {
             input.registrar.forget_app(group);
+            // O03 is judged from this: the group's emptiness, the grace period and the leader's
+            // code, all observed here because only here is the stop of *this* run's app.
+            outcome.shutdown = Some(info);
             Some(token)
         }
         Err(error) => {
@@ -412,6 +476,41 @@ async fn stop(
                 .push(format!("runtime: the app did not stop cleanly: {error}"));
             None
         }
+    }
+}
+
+/// Runs the migrate command a second time, for O04.
+///
+/// Only when the first run succeeded: a migration that failed the first time has already failed, and
+/// reporting its second failure as an idempotency problem would blame the tool for the repository's
+/// own error. The command comes from the boot's step list rather than being re-derived, so the second
+/// run is provably the same command as the first.
+async fn migrate_twice(
+    input: &RuntimeInput<'_>,
+    permit: &ExecPermit,
+    env: &BTreeMap<String, String>,
+    steps: &[StepFact],
+) -> Option<MigrateRun> {
+    let first = steps
+        .iter()
+        .find(|step| step.name == "migrate" && step.success)?;
+    let command = CommandSpec {
+        program: first.program.clone(),
+        args: first.args.clone(),
+        env: BTreeMap::new(),
+    };
+    let step = step_for(&command, input.work, "migrate-again", env);
+    match substance_runner::oneshot::run(&step, &input.run_dir.join("logs"), STEP_CAP, permit).await
+    {
+        Ok(output) => Some(MigrateRun {
+            success: output.success,
+            code: output.code,
+            command: first.display(),
+        }),
+        // Could not be run at all is not a failure *of the migration*: the check reports the reason
+        // rather than a fail, which is the difference between "it is not idempotent" and "we could
+        // not ask".
+        Err(_) => None,
     }
 }
 

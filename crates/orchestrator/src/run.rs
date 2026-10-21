@@ -12,7 +12,7 @@ use serde::Serialize;
 use substance_core::config::ProjectConfig;
 use substance_core::hash::CanonicalJsonError;
 use substance_core::model::report::{REPORT_SCHEMA_VERSION, Report};
-use substance_core::model::verdict::Target;
+use substance_core::model::verdict::{CheckVerdict, Target, Verdict};
 use substance_core::{CheckId, Timestamp, wall_now_utc};
 use substance_report::{RunDir, RunDirError};
 use substance_runner::{InterruptGuard, Registrar, install};
@@ -301,19 +301,65 @@ async fn run_stages(
     })
     .await;
     let mut runtime_notes = Vec::new();
+    let mut runtime_verdicts: Vec<CheckVerdict> = Vec::new();
     match runtime {
         Ok(outcome) => {
             // `canaries.json` is written even when nothing ran: it is what B13 reads, and a file that
             // appeared only on a full run would make B13's absence indistinguishable from a
             // missing file.
             run_dir.write_json("canaries.json", &outcome.canaries)?;
-            runtime_notes = outcome.notes;
+            // O01's exec part, O02, O03 and O04 are judged here, from what the stage observed. O05
+            // came from triage, because a Dockerfile is a file in the commit and needs no app.
+            runtime_verdicts = crate::operability::runtime_verdicts(&outcome);
+            if let Some(note) = crate::operability::readme_note(&outcome) {
+                runtime_notes.push(note);
+            }
+            if let Some(note) = crate::operability::readme_failure_note(&outcome) {
+                runtime_notes.push(note);
+            }
+            runtime_notes.extend(outcome.notes);
         }
         Err(note) => runtime_notes.push(note),
     }
 
+    // The runtime stage's verdicts replace the `not_measured` rows triage left for those checks:
+    // triage has no app, so O01's exec part, O02, O03 and O04 can only be answered after one ran.
+    // A check the project disabled stays disabled, which is why the config is consulted again here
+    // rather than trusting triage's copy.
+    let mut verdicts: Vec<CheckVerdict> = triage
+        .verdicts
+        .into_iter()
+        .map(|row| {
+            let Some(built) = runtime_verdicts
+                .iter()
+                .find(|built| built.check_id == row.check_id)
+            else {
+                return row;
+            };
+            if config.checks.disable.contains(&built.check_id) {
+                return row;
+            }
+            // O01 is the one check with a part from each stage: the static half is triage's and the
+            // exec half is this stage's, so the two are merged rather than replaced.
+            if built.check_id == CheckId::O01 {
+                let mut merged = row;
+                for (name, verdict) in &built.parts {
+                    merged.parts.insert(name.clone(), verdict.clone());
+                }
+                for (key, value) in &built.metrics {
+                    merged.metrics.insert(key.clone(), *value);
+                }
+                merged.verdict = Verdict::aggregate(&merged.parts);
+                return merged;
+            }
+            built.clone()
+        })
+        .collect();
+    verdicts
+        .sort_by(|left, right| (left.check_id, &left.target).cmp(&(right.check_id, &right.target)));
+
     let mut gates_hit: Vec<GateHit> = Vec::new();
-    for row in &triage.verdicts {
+    for row in &verdicts {
         // A hard gate fires on the check's own failure under `Always`, and on a *named* part's
         // failure under `SubChecks` (ADR-0002). The rule is asked once, here, so the exit code and
         // the report's gate list answer the same question.
@@ -332,7 +378,7 @@ async fn run_stages(
     let report = Report {
         schema_version: REPORT_SCHEMA_VERSION.to_owned(),
         manifest: manifest.clone(),
-        verdicts: triage.verdicts,
+        verdicts,
         findings: triage.findings,
         coverage: triage.coverage,
         archetype: triage.archetype,

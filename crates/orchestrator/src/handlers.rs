@@ -32,6 +32,13 @@ pub enum Handler {
     /// A triage check: judged from the repository, the forge and the registries, without
     /// executing any of the repository's code.
     Triage(TriageFn),
+    /// A runtime check: judged from what the run observed while the app was provisioned, booted,
+    /// migrated and stopped, so it needs `--allow-exec` and an app that starts.
+    ///
+    /// It carries no function pointer, unlike [`Self::Triage`], because there is nothing to dispatch
+    /// to: the runtime stage is one pass, it produces these verdicts as part of its own work rather
+    /// than in a family of its own, and `checks list` only needs to know that *something* runs them.
+    Runtime,
 }
 
 /// One check's judging function.
@@ -115,6 +122,7 @@ pub fn handler_for(id: CheckId) -> Option<Handler> {
         // ── Implemented: the triage stage judges these (M1). ─────────────────────────────────
         CheckId::D04
         | CheckId::O01
+        | CheckId::O05
         | CheckId::O10
         | CheckId::L05
         | CheckId::S01
@@ -163,6 +171,9 @@ pub fn handler_for(id: CheckId) -> Option<Handler> {
         | CheckId::H22
         | CheckId::V01
         | CheckId::V03 => Some(Handler::Triage(triage)),
+
+        // ── Runtime: judged from what a boot, a migrate and a stop observed (M2-T05). ────────
+        CheckId::O02 | CheckId::O03 | CheckId::O04 => Some(Handler::Runtime),
 
         // ── Reserved: the eight IDs the catalog holds back; they never run. ────────────────
         CheckId::V02
@@ -215,10 +226,6 @@ pub fn handler_for(id: CheckId) -> Option<Handler> {
         | CheckId::D01
         | CheckId::D02
         | CheckId::D03
-        | CheckId::O02
-        | CheckId::O03
-        | CheckId::O04
-        | CheckId::O05
         | CheckId::O06
         | CheckId::O07
         | CheckId::O08
@@ -265,6 +272,7 @@ pub fn family_of(id: CheckId) -> Option<Family> {
         CheckId::D04
         | CheckId::L05
         | CheckId::O01
+        | CheckId::O05
         | CheckId::O10
         | CheckId::S01
         | CheckId::S02

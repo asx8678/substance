@@ -28,7 +28,7 @@ use substance_runner::tool::ToolRunner;
 use crate::checks::verdict::StaticReport;
 use crate::checks::{
     agent_leftovers, committed_junk, config_contradictions, data_access_sprawl, docs_honesty,
-    escape_hatches, evaluator_manipulation, fake_ci, llm_keys_in_client, locked_install,
+    escape_hatches, evaluator_manipulation, fake_ci, llm_keys_in_client, locked_install, non_root,
     over_abstraction, scaffold_leftovers, secrets, skipped_and_weak_tests, slop_scan,
     startup_schema_traps, swallowed_writes,
 };
@@ -126,6 +126,7 @@ pub async fn run_static_checks(
     reports.push(data_access_sprawl(run_id, &mut tree).await);
     reports.push(startup_schema_traps(run_id, &mut tree, &scan_report.matches).await);
     reports.push(locked_install(run_id, &mut tree).await);
+    reports.push(non_root(run_id, &mut tree).await);
     reports.push(fake_ci(run_id, &mut tree).await);
     reports.push(skipped_and_weak_tests(run_id, &mut tree, &scan_report.matches).await);
     reports.push(llm_keys_in_client(run_id, &mut tree).await);
@@ -158,8 +159,8 @@ pub async fn run_static_checks(
 
     debug_assert_eq!(
         reports.len(),
-        17,
-        "twelve S checks, D04, O01, O10, T04 and L05"
+        18,
+        "twelve S checks, D04, O01, O05, O10, T04 and L05"
     );
     let vintage_matches = vintage_matches(&scan_report);
     Ok(assemble(reports, &scan_report, pack.len(), vintage_matches))
@@ -248,6 +249,7 @@ pub fn covers_all_checks(outcome: &StaticOutcome) -> bool {
         CheckId::D04,
         CheckId::L05,
         CheckId::O01,
+        CheckId::O05,
         CheckId::O10,
         CheckId::S01,
         CheckId::S02,

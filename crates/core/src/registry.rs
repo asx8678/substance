@@ -600,7 +600,7 @@ pub const REGISTRY: &[CheckMeta] = &[
         gate: GateRule::None,
         needs: &[Need::Repo, Need::Exec],
         milestone: Milestone::M2,
-        status: CheckStatus::Planned,
+        status: CheckStatus::Implemented,
         default_confidence: Confidence::Confirmed,
     },
     CheckMeta {
@@ -613,7 +613,7 @@ pub const REGISTRY: &[CheckMeta] = &[
         gate: GateRule::None,
         needs: &[Need::Exec],
         milestone: Milestone::M2,
-        status: CheckStatus::Planned,
+        status: CheckStatus::Implemented,
         default_confidence: Confidence::Confirmed,
     },
     CheckMeta {
@@ -626,7 +626,7 @@ pub const REGISTRY: &[CheckMeta] = &[
         gate: GateRule::None,
         needs: &[Need::Exec],
         milestone: Milestone::M2,
-        status: CheckStatus::Planned,
+        status: CheckStatus::Implemented,
         default_confidence: Confidence::Confirmed,
     },
     CheckMeta {
@@ -639,7 +639,7 @@ pub const REGISTRY: &[CheckMeta] = &[
         gate: GateRule::None,
         needs: &[Need::Repo],
         milestone: Milestone::M2,
-        status: CheckStatus::Planned,
+        status: CheckStatus::Implemented,
         default_confidence: Confidence::Confirmed,
     },
     CheckMeta {

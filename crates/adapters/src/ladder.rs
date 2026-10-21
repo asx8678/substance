@@ -51,7 +51,7 @@ use substance_core::config::ProjectConfig;
 use substance_core::model::{BootOutcome, BootRung, CommandSpec, Friction};
 use substance_runner::{AppProcess, Budget, ExecPermit, OwnedApp, ProcessSpec, WorkCopy};
 
-use crate::boot::{BootEnv, BootError, FreshCopy, prepare};
+use crate::boot::{BootEnv, BootError, FreshCopy, StepFact, prepare};
 use crate::stack::{BootPlan, RepoView};
 use crate::ts::shell_command;
 
@@ -163,6 +163,65 @@ pub fn readme_script(blocks: &[ReadmeBlock]) -> Option<String> {
     Some(script)
 }
 
+/// Whether the repository's README, followed as written, boots the app -- tried on its own (M2-T05).
+///
+/// The ladder cannot answer this. Its job is to find *some* way in, so it tries the rungs in
+/// preference order and stops at the first that works: a repository with a good `substance.toml`
+/// never reaches the README rung, and O02 would then be `not_measured` in exactly the case it is
+/// most needed -- a project that documents nothing useful but configures its way around it.
+///
+/// So O02 asks the README on its own, in a fresh export when one is available, and stops whatever it
+/// started.
+///
+/// `None` means there is no README rung at all -- no README, or one with no shell blocks under a
+/// setup heading -- which is `not_measured`, not a fail: a project with no setup instructions is not
+/// one whose setup instructions are wrong.
+#[must_use]
+pub async fn try_readme(
+    repo: &RepoView,
+    env: &BootEnv<'_>,
+    shutdown: Budget,
+    permit: &ExecPermit,
+) -> Option<Result<(), String>> {
+    let plan = readme_plan(repo)?;
+    let mut ignored: Vec<Friction> = Vec::new();
+    // No export available leaves `None`, and the trial then runs in `work` while the boot's own
+    // friction says so. Asking in the wrong directory is better than not asking.
+    let copy: Option<WorkCopy> = make_readme_copy(env, &mut ignored, BootRung::Readme)
+        .await
+        .unwrap_or_default();
+    let rung_env = match &copy {
+        Some(copy) => env.in_dir(copy.root()),
+        None => env.in_dir(env.work),
+    };
+    // The README rung's own steps first: a repository whose documented install fails has failed.
+    let outcome = match prepare(&plan, BootRung::Readme, &rung_env, permit).await {
+        Err(error) => Err(error.to_string()),
+        Ok(prepared) if !prepared.ready_to_start => Err(format!(
+            "the README's {} step failed",
+            prepared.failed_step.unwrap_or_else(|| "setup".to_owned())
+        )),
+        Ok(_) => match start_app(&plan, &rung_env, shutdown, permit).await {
+            Ok(mut app) => {
+                // Stopped before the copy goes: the process's working directory is inside it.
+                // The trial's own shutdown grace. The caller's `shutdown` budget bounds the whole
+                // trial, so a stop that waited for it could sit there after the sched's cap fired;
+                // a fixed short grace is what the other stop paths use for the same reason.
+                match app.stop(TRIAL_STOP_GRACE).await {
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(format!("the README's app did not stop: {error}")),
+                }
+            }
+            Err(reason) => Err(reason),
+        },
+    };
+    remove_copy(copy.as_ref(), &mut ignored, BootRung::Readme);
+    Some(outcome)
+}
+
+/// How long the README trial waits for the app it started to leave.
+const TRIAL_STOP_GRACE: Duration = Duration::from_secs(5);
+
 /// The README rung's plan: one script as the start command.
 ///
 /// The script *is* the start command, because a README may end with `npm run dev` and never return.
@@ -260,6 +319,13 @@ pub struct Booted {
     pub outcome: BootOutcome,
     /// The running app, when one booted. `None` when every rung failed.
     pub app: Option<BootedApp>,
+    /// Every one-shot step that ran, from every rung, in the order they ran.
+    ///
+    /// Kept beside the outcome rather than inside it because `BootOutcome` is a serialized model type
+    /// the report schema describes, and this is a fact about what this machine did, not about the
+    /// repository: O01's exec part and O04 are judged from it, and a report that carried it would be
+    /// claiming something the catalog does not have a field for.
+    pub steps: Vec<StepFact>,
 }
 
 /// The app a boot produced, plus the private copy it runs out of when rung 1 booted it.
@@ -308,7 +374,12 @@ impl BootedApp {
         self.copy.as_ref()
     }
 
-    /// Stops the app and returns proof that it is gone, ready for a snapshot or a reset.
+    /// Stops the app and returns what the stop observed, plus proof that it is gone.
+    ///
+    /// The [`ExitInfo`] comes back beside the token because it is the whole of O03's evidence: the
+    /// group's emptiness, whether the leader left within the grace period, and its code. A caller
+    /// that only took the token would have to stop the app a second time to learn any of it, and a
+    /// second stop is a different observation.
     ///
     /// # Errors
     ///
@@ -317,9 +388,11 @@ impl BootedApp {
     pub async fn stop(
         &mut self,
         grace: Duration,
-    ) -> Result<substance_runner::StoppedApp, substance_runner::ProcessError> {
-        let (_info, token) = self.app.stop(grace).await?;
-        Ok(token)
+    ) -> Result<
+        (substance_runner::ExitInfo, substance_runner::StoppedApp),
+        substance_runner::ProcessError,
+    > {
+        self.app.stop(grace).await
     }
 
     /// Removes the rung's copy, if it has one and the app is stopped.
@@ -395,6 +468,7 @@ pub async fn boot(
         });
     }
     let mut friction: Vec<Friction> = Vec::new();
+    let mut steps: Vec<StepFact> = Vec::new();
     let mut last_failure: Option<String> = None;
     for (rung, plan) in attempts {
         // The README rung gets its own export. `None` means this rung runs in the run's own work
@@ -434,6 +508,7 @@ pub async fn boot(
             }
         };
         friction.extend(prepared.friction);
+        steps.extend(prepared.steps);
         if !prepared.ready_to_start {
             last_failure = Some(format!(
                 "{} rung: {} failed",
@@ -461,6 +536,7 @@ pub async fn boot(
                         failure: None,
                     },
                     app: Some(app),
+                    steps,
                 });
             }
             Err(reason) => {
@@ -492,6 +568,7 @@ pub async fn boot(
             failure: last_failure,
         },
         app: None,
+        steps,
     })
 }
 

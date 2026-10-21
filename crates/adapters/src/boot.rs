@@ -66,6 +66,44 @@ pub struct Prepared {
     pub ready_to_start: bool,
     /// Which step failed first, when one did.
     pub failed_step: Option<String>,
+    /// Every step that ran, in order, whatever its outcome.
+    ///
+    /// The friction log records failures, because that is what a reader diagnosing a broken boot
+    /// reads. O01 asks a different question -- did the *locked install* succeed -- and a successful
+    /// install leaves no friction to look at, so the successes are recorded here too.
+    pub steps: Vec<StepFact>,
+}
+
+/// One one-shot step that ran, as evidence for a check.
+///
+/// Carries the program and its arguments as well as the display string, so a caller that has to run
+/// the same command again (O04 runs migrate twice) can do it without re-deriving it from a sentence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StepFact {
+    /// Which step: `install`, `build`, `migrate` or `seed`.
+    pub name: String,
+    /// The command, as it was run.
+    pub program: String,
+    /// Its arguments, in order.
+    pub args: Vec<String>,
+    /// Whether it exited 0.
+    pub success: bool,
+    /// Its exit code, absent when a signal ended it.
+    pub code: Option<i32>,
+    /// How many bytes into its log its output ended, so a reader can find it.
+    pub log_end: u64,
+}
+
+impl StepFact {
+    /// The command as one line, for a message.
+    #[must_use]
+    pub fn display(&self) -> String {
+        if self.args.is_empty() {
+            self.program.clone()
+        } else {
+            format!("{} {}", self.program, self.args.join(" "))
+        }
+    }
 }
 
 /// Runs a plan's one-shot steps: install, build, migrate, seed.
@@ -103,6 +141,7 @@ pub async fn prepare(
         ("migrate", plan.migrate.as_ref()),
         ("seed", seed),
     ];
+    let mut ran: Vec<StepFact> = Vec::new();
     for (name, command) in steps {
         let Some(command) = command else {
             continue;
@@ -114,12 +153,21 @@ pub async fn prepare(
                 step: name.to_owned(),
                 source,
             })?;
+        ran.push(StepFact {
+            name: name.to_owned(),
+            program: command.program.clone(),
+            args: command.args.clone(),
+            success: output.success,
+            code: output.code,
+            log_end: output.log_end,
+        });
         if !output.success {
             friction.push(friction_of(rung, name, &step, &output));
             return Ok(Prepared {
                 friction,
                 ready_to_start: false,
                 failed_step: Some(name.to_owned()),
+                steps: ran,
             });
         }
     }
@@ -127,6 +175,7 @@ pub async fn prepare(
         friction,
         ready_to_start: true,
         failed_step: None,
+        steps: ran,
     })
 }
 
@@ -159,9 +208,13 @@ pub struct BootEnv<'a> {
     /// Whether the caller seeds after the app is up, instead of during the boot.
     ///
     /// The runtime stage seeds the *live* database and then snapshots it, so a seed that ran inside
-    /// the boot would run twice. A caller that seeds itself sets this and leaves `seed` out of the
-    /// steps that run here; the plan still records the command, because the adapter's detection is
-    /// what found it. Default `false`: a boot on its own seeds, which is what a probe wants.
+    /// the boot would run twice. A caller that seeds itself leaves this `true` and owns the step;
+    /// the plan still records the command, because the adapter's detection is what found it.
+    ///
+    /// A plain bool with no `Default` impl, deliberately: the runtime stage is the caller that
+    /// boots an app in this build, and a field that defaulted to `false` through `..Default::default()`
+    /// would seed twice in every repository that has a seed command. A caller that wants the plan's
+    /// own seed step -- a probe, or a boot with no stage behind it -- says `false` and means it.
     pub defer_seed: bool,
     /// Environment the run needs, on top of the plan's own: the database's URL, typically.
     ///

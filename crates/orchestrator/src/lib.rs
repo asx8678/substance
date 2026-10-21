@@ -8,6 +8,7 @@ pub mod config;
 pub mod handlers;
 pub mod intake;
 pub mod manifest;
+pub mod operability;
 pub mod provenance;
 pub mod run;
 pub mod runtime;

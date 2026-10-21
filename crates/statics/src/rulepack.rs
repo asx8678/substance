@@ -42,8 +42,8 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../../../rules/js/skipped-tests.yml"),
     ),
     (
-        "rules/provenance/api-vintage.yml",
-        include_str!("../../../rules/provenance/api-vintage.yml"),
+        "rules/python/api-vintage.yml",
+        include_str!("../../../rules/python/api-vintage.yml"),
     ),
     (
         "rules/python/escape-hatches.yml",
@@ -76,6 +76,10 @@ pub const FILES: &[(&str, &str)] = &[
     (
         "rules/rust/swallowed-writes.yml",
         include_str!("../../../rules/rust/swallowed-writes.yml"),
+    ),
+    (
+        "rules/ts/api-vintage.yml",
+        include_str!("../../../rules/ts/api-vintage.yml"),
     ),
     (
         "rules/ts/escape-hatches.yml",

@@ -1,0 +1,25 @@
+# V03 knowledge cut-off: outdated TypeScript API styles (M1-T11, split by language in M2-T05).
+#
+# The openai-node 3.x surface, replaced by the 4.x client. See `rules/python/api-vintage.yml` for
+# what these rules are for and why matching one is a bracketing rather than a finding.
+
+id: v03-openai-v3-client
+language: ts
+severity: hint
+message: "the openai-node 3.x client, replaced by the 4.x client"
+metadata:
+  check_id: V03
+  sub_check: openai-v3-client-ts
+rule:
+  pattern: new OpenAIApi($$$ARGS)
+
+---
+id: v03-openai-v3-config
+language: ts
+severity: hint
+message: "`new Configuration({...})`, the openai-node 3.x config object"
+metadata:
+  check_id: V03
+  sub_check: openai-v3-client-ts
+rule:
+  pattern: new Configuration($$$ARGS)
