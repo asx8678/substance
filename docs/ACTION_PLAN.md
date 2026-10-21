@@ -544,7 +544,7 @@ disable = []                  # reported as not_measured("disabled by config")
 substance run <REPO> [--rev <sha>] [--out <dir>] [--as-of <rfc3339>] [--seed <u64>] [--config <path>]
                      [--triage-only] [--allow-exec] [--snapshot-from <run_dir>]
                      [--format json,html,sarif] [--fail-on gate|critical|high|none]
-substance replay <RECORD_OR_FINDING_ID> --run <dir>
+substance replay <RECORD_OR_FINDING_ID> --run <dir> --source <repo> --allow-exec
 substance bench [--suite <dir>] [--runs <n>] [--baseline <file>]
 substance report <RUN_DIR> [--format json,html,sarif]      # re-render or re-judge stored data
 substance schema export --out <dir>
