@@ -62,6 +62,23 @@ Every component follows these rules. When two conflict, the earlier one wins.
 11. **Separate axes.** "Works now", "will be maintained" and "is generic" are different questions. Never average them into one opaque number.
 12. **Repo content is hostile data.** README, comments and code are untrusted input to any agent. Text addressed to AI evaluators is itself a finding (S12).
 
+## System overview
+
+_Pipeline diagram (7 stages, triage lane, agent and API side lanes): see the online doc, https://claude.ai/artifact/Lgf5vCggP4Fhhj5er3TLxN_
+
+Read it top down: triage skips the sandbox and reports directly, the agent only helps exploration, and every verdict passes through the oracles.
+
+Pipeline stages:
+
+1. **Intake:** resolve the repo or URL, access mode and budget; write the run manifest.
+2. **Triage (no sandbox):** history, static and dependency checks. Results go straight to the report; `--triage-only` stops here.
+3. **Sandbox:** build ladder, clean-room boot, seed data, snapshot.
+4. **Explore:** the deterministic crawler builds the AppModel and records traffic (HAR); the agent helps only when the crawler is stuck.
+5. **Spec:** use the app's own OpenAPI spec, or infer one from recorded traffic; extract the route table in repo mode.
+6. **Probe:** run catalog checks on fresh snapshots through the driver and recorder; API fuzzers run against the spec.
+7. **Judge:** oracles turn effect records and tool outputs into findings, applying the 3-of-3 reproduction rule.
+8. **Report:** scoring, hard gates, coverage, archetype, provenance panel and replay commands.
+
 ## Tech stack and repository layout
 
 Rust is the core: it orchestrates, decides and scores. A thin TypeScript driver controls the browser, because Playwright is built in Node (even its Python bindings run a bundled Node process). Every other tool runs in a container, and Rust parses its JSON or SARIF output.
@@ -422,3 +439,271 @@ Dependencies (P):
 | P05 | Bloat and overlap | Dependencies per thousand authored lines; several libraries for one job; unused dependencies (knip, cargo-machete, deptry) | M1 |
 | P06 | Licenses | Dependency licenses incompatible with the project license (cargo-deny, license-checker, pip-licenses) | M1 |
 | P07 | Dependency vitality | Direct dependencies that the history checks classify as abandoned or one-shot | M1 |
+
+## Repo history and vitality
+
+History answers "was this built or dumped, and will anyone fix it?" It needs no sandbox, runs in seconds, and goes first as triage.
+
+Two rules for every metric:
+
+- **Measure what is expensive to fake.** Commit counts, commit dates and stars are cheap to fake: agents commit at every step, commit dates are set by the client, and stars can be bought. Prefer server-side timestamps, time spread and other people.
+- **Count authored lines only.** Exclude lockfiles, generated code (`linguist-generated`, `@generated`), vendored folders, minified files, snapshots, fixtures, i18n JSON and assets. Detect renames and moves, and ignore whitespace-only changes.
+
+| ID | Signal | How it is computed | Cost to fake |
+| --- | --- | --- | --- |
+| H01 | Chronology | Server-side dates (repo creation, first PR, issue, CI run, registry release) vs. commit dates; commits older than the repo mean imported or backdated history | High |
+| H02 | Active weeks | Distinct weeks with human commits or merged PRs, last 90 and 365 days | Medium |
+| H03 | Big-bang ratio | Share of today's lines (via blame) that come from the project's first day | High |
+| H04 | Commit size | Median and 90th percentile of authored lines; share of today's code from commits over 1,000 authored lines; giant commits after day one weigh more | Medium |
+| H05 | Machine-speed commits | Authored lines divided by minutes since the same author's previous commit | Medium |
+| H06 | Upload dumps | Commits with GitHub's browser-upload message "Add files via upload", weighted by size | Low |
+| H07 | Fix chains | Commits minutes apart on the same files with "fix" messages and failing CI between them | Medium |
+| H08 | Refactoring signals | GitClear's definitions: share of moved lines, copy/paste within one commit, age of the lines being changed | High |
+| H09 | Short-lived code | Share of added lines deleted within 7 days | Medium |
+| H10 | Message vs. diff | Generic messages ("update") on large diffs; share of generic messages overall | Low |
+| H11 | Maintainers and bus factor | Distinct humans who merged PRs or wrote surviving lines (deduplicated with `.mailmap` and account IDs, bots excluded); bus factor = fewest people who wrote half of today's code | Medium |
+| H12 | Review | Share of merged PRs approved by someone other than the author; rubber-stamp merges (under 1 minute, no comments) | Medium |
+| H13 | Maintenance | Time to first response on outsiders' issues and PRs, time to merge security updates, libyear, CI status on the default branch | Medium–high |
+| H14 | Real usage | Outside issue authors whose accounts have real history; dependents (deps.dev); downloads from npm, PyPI or crates.io | Medium |
+| H15 | Silent tracker | Only the author ever opens or comments on issues | Medium |
+| H16 | Claims vs. history | CHANGELOG versions with no tag or release; badges pointing at missing workflows or static images; "production-ready" or "battle-tested" with few active weeks | Medium |
+| H17 | Template divergence | How much changed since the GitHub template origin or a known scaffold | Medium |
+| H18 | Star spikes | Star bursts from freshly created accounts; a red flag only, never a positive signal | — |
+| H19 | Repo farms | One account creating many one-shot repos in a short span; context only, since the project is judged, not the person | — |
+| H20 | Velocity | Authored lines per active person-day; thousands per day for weeks means generated, almost certainly unreviewed code | Medium |
+| H21 | OpenSSF Scorecard | Run Scorecard and import its checks (Maintained, Code-Review, Contributors, Branch-Protection, CI-Tests, Dangerous-Workflow, Pinned-Dependencies) | — |
+| H22 | Archetype | The deterministic classification below | — |
+
+Archetypes are reported instead of a single history score, with the numbers that triggered them. Thresholds come from the benchmark corpora.
+
+| Archetype | Rule |
+| --- | --- |
+| One-shot dump | Most of today's code is from day one; few active weeks; no outside issues |
+| Burst, then abandoned | Activity in the first weeks; nothing in the last 90 days |
+| Young and iterating | Under 90 days old, but many active days, mostly edits, tests changing with the code |
+| Solo maintained | Recently active; bus factor 1; answers issues |
+| Team maintained | Two or more people merging; most PRs reviewed |
+| Unverifiable history | Commit dates predate the repo, so the timeline can't be trusted |
+
+False positives to handle:
+
+- **Squash merges:** few commits but healthy history; use PR history instead.
+- **Forks:** count only commits that aren't upstream.
+- **Private work, then a public release:** looks like a big bang; judge what happens after the first public commit.
+- **Bus factor 1:** normal for small, good projects; a risk flag, not slop.
+
+P07 runs the same checks on every direct dependency.
+
+## Provenance
+
+Provenance gets its own report panel and never enters any score; the code is judged on what it does.
+
+**V01 Declared provenance (M1).** Read what tools sign before guessing anything:
+
+- **Claude Code** adds a commit trailer by default, configurable or removable through the `attribution.commit` setting; left unchanged, it names the session's model. Commits from cloud and Remote Control sessions can also carry a claude.ai session link.
+- **Codex** adds `Co-authored-by: Codex <noreply@openai.com>` by default (`commit_attribution`); the value is static and doesn't name the model.
+- **Aider's** convention tags the author name with "(aider)" and names the model as co-author.
+- **Bot authors and branches:** coding-agent PRs and app builders committing as bots.
+- **Instruction files:** `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules`, `.github/copilot-instructions.md`, `.kiro/steering`. These name the tool, not the model.
+
+All of these can be turned off or stripped, so their absence proves nothing. Map them onto today's lines with blame.
+
+**V02 Statistical attribution (later).** Published studies report roughly 88–97% accuracy in lab conditions; real repos are harder (human edits, mixed models, formatters, unseen models). Rules when it is built:
+
+- Classify per commit or per changed block, above a minimum size; aim at the model family first.
+- Report top guesses with probabilities; default to "unknown" or "unseen model".
+- Train in Python with labels from V01 trailers and the benchmark corpus; export to ONNX; run from Rust via `ort` with pinned weights.
+
+**V03 Knowledge-cutoff estimate (M1).** From P03's dependency vintage and outdated API styles (for example the old OpenAI Python SDK's `openai.ChatCompletion.create`), estimate when the generating model's knowledge ends.
+
+What the panel shows and what it is for:
+
+- Share of today's lines by declared tool and model, then the statistical guess with its confidence, then unknown.
+- Per-model risk: AI-written code merged without review and without test changes.
+- Aggregate data across many repos: which models and app builders produce which defect classes.
+- Never use the statistical guess to accuse a person of using AI.
+
+Code watermarks exist only in research, and detection usually needs vendor-private access, so they are out of scope.
+
+## The small agentic layer
+
+Agents are optional, budgeted and never decide verdicts. Every agent output becomes a frozen artifact that is validated before use, then cached per commit.
+
+| ID | Job | Output artifact | Validation before use | M |
+| --- | --- | --- | --- | --- |
+| A01 | Unblock the crawler; boot from the README when the build ladder fails | Playwright script; boot steps | The script replays deterministically on a fresh snapshot | M12 |
+| A02 | Label the app model | Success-signal selector, entity list and detail screens, search field | The selector appears in the baseline success run; every label resolves to an element | M12 |
+| A03 | Propose domain invariants | Executable predicates, such as "invoice total = sum of lines + tax" | Must hold on the known-good seeded state, or it is discarded | M12 |
+| A04 | Modifiability probe | A patch that adds one field end to end | Measured deterministically: files touched, tests broken, evaluator results after the change | M12 |
+| A05 | Claim extraction | Checkable claims from the README and UI | Each claim maps to a check, or is marked unverifiable | Later |
+
+Rules:
+
+- The deterministic crawler runs first; the agent is called only when the crawler is stuck or needs meaning.
+- Per-app budget in tokens and minutes; artifacts cached by commit SHA, so re-runs cost no tokens.
+- Repo text reaches the agent only as delimited, untrusted data.
+- Model IDs and prompt versions go into the run manifest.
+- With the agent turned off, every check that doesn't need it must produce the same verdicts.
+
+## Scoring and report
+
+The report is a profile, not one number: separate axes, hard gates, coverage beside every score, and evidence behind every finding.
+
+| Axis | Fed by |
+| --- | --- |
+| Works now | B01–B04, B08, B18–B21, I01 |
+| Honest | B02, B03, I04, O06, S08, H16 |
+| Robust | B05–B07, B09, B15–B17, B23, B24, O07, L03 |
+| Safe | B10–B14, B25, B26, B28, B30, B33, I01 (`ignored_auth`), S11, P01–P04, L01, L04, L05 |
+| Data integrity | D01–D04, B04, B05, B09 |
+| Operable | O01–O05, O08–O11, B16 |
+| Maintainable | T01–T06, S02, S09, S10, A04 |
+| Vitality | H01–H22, P07, shown as archetype plus metrics |
+| Provenance | V01–V03, a panel, never scored |
+| Generic | G01–G02, later |
+
+Scoring rules:
+
+- **Severity is fixed per check** in the catalog, so scores stay deterministic.
+- **Hard gates:** any one fails the app regardless of other results. Gates: data loss on a server rung of B05; lying success (B02); authorization breach (B10, B11, I01 `ignored_auth`); a secret or service key in the client (S11, B33, L05); an open paid-API proxy (L01); a canary leaking to a third party or another user (B13).
+- **Weakest link within an axis:** the score follows the worst critical flow, not the average.
+- **Coverage beside every score:** routes reached, controls exercised, server code executed (repo mode), checks measured. Low coverage lowers confidence, never raises the score.
+- **Slop label:** needs agreeing evidence from two check families (principle 10).
+- **Weights:** hand-set and versioned in v1; learned later (Later roadmap).
+
+The summary combines the present and the future:
+
+|  | Maintained | Abandoned or one-shot |
+| --- | --- | --- |
+| Works now | Safe to adopt | Works until it breaks, and nobody will fix it: freeze or fork it |
+| Broken now | Being fixed: check back later | Slop |
+
+Outputs per run:
+
+- `report.html`: static and self-contained.
+- `report.json`: schema-versioned.
+- `report.sarif`: for CI and code scanning.
+- `evidence/`: blobs, traces, DB diffs.
+- Every finding includes `substance replay <finding-id>`, which reruns its probe on a fresh snapshot.
+
+## Evaluating the evaluator
+
+The evaluator ships a check only when it catches known bugs, stays quiet on good apps and gives the same answer twice.
+
+Defect-injection benchmark in `bench/`:
+
+- **Base apps:** RealWorld (Conduit) implementations in TypeScript, Python and Rust that pass RealWorld's own API test suite, plus one Vite + Supabase app and one Next.js + Prisma app.
+- **Injections:** ast-grep rewrite rules, the same engine as the static checks. One defect per variant, each naming the checks that must catch it.
+- **Metrics:** recall per check, false positives on the untouched base apps, score spread over 5 runs of the same app, and agreement with a few engineers' "which of these two is more solid?" picks.
+- **Regression gate:** no change merges if recall drops or false positives rise.
+
+Starting set of injections:
+
+| Injection | Language | Must be caught by |
+| --- | --- | --- |
+| Remove `await` before a DB write | TypeScript | B03, B02, S03 |
+| Delete `Depends(get_current_user)` | Python | B10, I01 |
+| Turn `.await?` into `.await.ok()` | Rust | B02, B04, S02 |
+| Swap an error toast for a success toast | TypeScript | B02 |
+| Remove an ownership check | All | B10 |
+| Replace the DB with an in-memory store | All | B05 |
+| Remove a pagination limit | All | B17 |
+| Log the request body in the login handler | All | B13 |
+| Pass the request body straight to the ORM | All | B11 |
+| Make `/health` return 200 unconditionally | All | O06 |
+
+Corpora for calibration:
+
+- **Slop corpus:** apps generated from VIBE's 200 public task specs with several models and app builders.
+- **Trusted corpus:** small, maintained open-source apps per language.
+- **Thresholds** (H04 commit sizes, H20 velocity, archetype cut-offs) are set from these corpora per language, never guessed.
+
+## Milestones
+
+Build in this order; a milestone is done when its acceptance criteria pass in CI. Time and recall figures are starting targets, to be adjusted after the first benchmark run.
+
+| # | Milestone | Deliverables | Acceptance criteria |
+| --- | --- | --- | --- |
+| M0 | Foundations | Cargo workspace, `core` types, JSON Schema and TypeScript type generation, CLI skeleton, run manifest, `report.json` v0 | Schemas regenerate in CI with no diff; round-trip tests for every core type |
+| M1 | Triage without a sandbox | H01–H22, S01–S12, D04, O01 (static), O10, T04–T06, P01–P07, V01, V03, L05 (repo), HTML report v0 | Runs on a public repo in under 2 minutes after cloning; the same `as_of` snapshot gives an identical report |
+| M2 | Sandbox and boot | Build ladder; TypeScript adapters (Next.js, Vite + Supabase, Express/Hono); Postgres and SQLite adapters; seeding; snapshot and reset; O01–O05 | RealWorld TypeScript boots from a clean clone; snapshot reset works per probe |
+| M3 | Recorder and driver | TypeScript driver, JSON-lines protocol, all channels, normalization, idle baseline, settling, `replay` | The same action twice on the same snapshot gives byte-identical normalized records |
+| M4 | Crawler and first oracles | Deterministic crawler, AppModel, B01–B04, B18, B19, B28–B31, L05 (bundle) | Zero findings on unmodified RealWorld TypeScript |
+| M5 | Benchmark v1 | `bench/` with the TypeScript base apps and their injections | Each M4 check catches its own injections (target: recall at least 90%) |
+| M6 | Data and trust probes | B05, B06, B09–B14, B25, B32, B33 | Injections caught; no false positives on base apps |
+| M7 | API layer | Spec inference, Schemathesis, RESTler (optional), drift, B07, API-level B08 | A FastAPI app and an inferred-spec app are fuzzed; findings deduplicated against B checks |
+| M8 | Resilience, operations and channels | Toxiproxy, egress proxy with LLM stub, Mailpit; B15–B17, B24, B26, B27, O06–O09, O11, L01–L04 | Every new check catches at least one injected defect |
+| M9 | Front-end completeness and data model | B20–B23, D01–D03 | Each check verified on a base app and an injected variant |
+| M10 | Test truthfulness | T01–T03, with mutation testing limited by the coverage map | Mutation runs stay within the configured time budget |
+| M11 | Python and Rust packs | FastAPI, Django, Flask, Streamlit, Axum and Actix adapters; language rules; RealWorld Python and Rust in `bench/` | Benchmark recall per language within 10 points of TypeScript |
+| M12 | Agentic layer | A01–A04; UI-level B08 using A02 labels | With the agent off, verdicts are unchanged for every check that doesn't need it |
+| M13 | Scoring v1 and report | Axes, hard gates, coverage, archetypes, the summary matrix, provenance panel, SARIF, replay | Every finding has evidence and a replay command that reproduces it |
+
+## Later roadmap
+
+These were agreed as direction, not v1 scope; keep the v1 design open for them.
+
+- **G01 Genericness, regenerate-and-diff:** infer the shortest prompt that would produce the app, regenerate 3–5 apps from it with different agents, and diff feature inventories. What the baselines don't reproduce is the app's real intent. Cache baselines per app category.
+- **G02 Domain-rule density:** count domain rules, edge cases and constraints the code encodes beyond generic CRUD.
+- **V02 Statistical attribution** (see Provenance).
+- **Learned scoring weights:** logistic regression on the indicators from the labeled corpus, with each indicator's contribution shown ("giant commits after day one: odds ×6"); weights versioned.
+- **Oracle plugins:** oracles are pure functions over records, so third parties can ship them as WebAssembly, run in wasmtime with fuel limits.
+- **Per-PR incremental runs:** re-run only checks whose code changed (from the coverage map) and chart trends to show regressions.
+- **Payments channel:** Stripe test mode for checkout flows.
+- **More databases and interfaces:** MySQL, MongoDB, the Firestore emulator; mobile via Appium or Maestro; CLIs via a pseudo-terminal; desktop via OS accessibility APIs.
+- **Service mode:** Elixir/Phoenix with Oban as the job queue and LiveView as the dashboard, running the CLI per job.
+- **Fix tasks for coding agents:** export findings as SARIF plus a reproducer, then re-run to confirm the fix.
+- **A05 Claim extraction** from the README and UI.
+
+## Engineering conventions
+
+The evaluator must pass its own checks, so build it the way it judges other projects.
+
+- **Rust:** 2024 edition; `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::todo)]` in library crates; `thiserror` in libraries, `anyhow` only in the CLI; `tracing` for logs.
+- **TypeScript driver:** `strict` tsconfig, no `any`, typescript-eslint `no-floating-promises` enabled.
+- **Oracles:** pure functions with table-driven tests over recorded EffectRecords (golden files under `crates/oracles/tests/fixtures/`).
+- **Probes:** every probe has an integration test against a benchmark app, with and without its injected defect.
+- **Determinism in CI:** run the M4 suite twice on the same snapshot and diff the normalized outputs.
+- **Versions:** tool images pinned by digest, rule packs versioned, and any schema change bumps the `report.json` version.
+- **Decisions:** one ADR per decision in `docs/decisions/`; check IDs are stable and never reused.
+- **Dogfooding:** run `substance` on its own repo in CI from M1 onward.
+- **History hygiene:** small, descriptive commits with tests alongside the code. The history checks will judge this repo too.
+
+## Glossary and references
+
+| Term | Meaning |
+| --- | --- |
+| Effect record | Immutable record of everything one action changed, across all channels |
+| Oracle | Pure function over effect records that returns a verdict |
+| Probe | Active procedure that drives the app and produces effect records |
+| Check | A probe and oracle pair with a stable ID, severity and destructiveness level |
+| Finding | A failed check, with evidence and a replay command |
+| AppModel | Screens, controls, forms, requests and entities found by exploration |
+| Settle | The moment an action counts as finished |
+| Idle baseline | Traffic a page produces with no user action |
+| Destructiveness level | 0–3 rating of how invasive a probe is |
+| Archetype | History classification, such as one-shot dump or team maintained |
+| Potemkin app | An app whose surface promises features its substance doesn't deliver |
+
+Sources:
+
+- [Schemathesis checks reference](https://schemathesis.readthedocs.io/en/stable/reference/checks/)
+- [Schemathesis CLI reference](https://schemathesis.readthedocs.io/en/stable/reference/cli/)
+- [RESTler FAQ (checkers)](https://github.com/microsoft/restler-fuzzer/blob/0beec440c801aed6191b2d67c0a846a5bf9088ca/docs/user-guide/FAQ.md)
+- [Checking Security Properties of Cloud Services REST APIs](https://www.microsoft.com/en-us/research/uploads/prod/2019/02/paper2.pdf)
+- [Redocly CLI generate-spec and drift](https://redocly.com/docs/cli/commands/generate-spec)
+- [mitmproxy2swagger](https://docsearch.algolia.com/mcp/docs/repo/alufers/mitmproxy2swagger)
+- [WebGen-Bench (NeurIPS 2025)](https://neurips.cc/virtual/2025/poster/121451)
+- [Vibe Code Bench v1.1](https://benchlm.ai/md/benchmarks/vibecodebench.md)
+- [VIBE benchmark task specs](https://huggingface.co/datasets/MiniMaxAI/VIBE/commit/9f6120089eb2a9c6bb63cf2ea202d706007f3f70)
+- [Package hallucination study](https://server-nexa.polito.it/hyperkitty/list/nexa@server-nexa.polito.it/thread/KRNUNFZXRASBF7XXFJP5ZYDIBW55AZM5/)
+- [CSA research note on slopsquatting](https://labs.cloudsecurityalliance.org/research-rb/csa-research-note-slopsquatting-ai-coding-assistant-supply-c/)
+- [GitClear report on AI and code quality (DevClass)](https://devclass.com/2025/02/20/ai-is-eroding-code-quality-states-new-in-depth-report/)
+- [Claude Code settings reference (attribution)](https://code.claude.com/docs/en/settings-reference.md)
+- [Claude Code attribution default (Classmethod)](https://dev.classmethod.jp/en/articles/claude-code-attribution-setting/)
+- [Codex CLI commit attribution](https://codex.danielvaughan.com/2026/03/28/codex-cli-commit-attribution/)
+- [LLM code stylometry for authorship attribution](https://deepfake-demo.aisec.fraunhofer.de/related_work/2506.17323)
+- [Attribution of LLM-generated JavaScript](https://huggingface.co/papers/2510.10493)
+- [aislop](https://pypi.org/project/aislop/)
+- [AI-SLOP Detector](https://pypi.org/project/ai-slop-detector/)
+- [antislop](https://docs.rs/antislop)
