@@ -1,0 +1,171 @@
+# Normalization rules (M3-T05). Data, not code; Rust is the source of truth.
+#
+# Every rule is applied to a body before it is hashed and before two runs are compared, so that two
+# runs of the same action produce the same bytes. A rule is written against a *shape* that appears in
+# serialized HTML or JSON, never against a word: a pattern that matched the word "id" would rewrite
+# half a page.
+#
+# id          a stable name, so a record can say which rule ran (and a diff can name the one that
+#             changed)
+# token       what a match becomes. This is the `replace` value the driver applies, so it must be a
+#             JavaScript replacement string: `$1` copies a capture group.
+# regex       the pattern. It must compile in BOTH Rust's `regex` crate and JavaScript's `RegExp`,
+#             because Rust and the driver apply the same list. `load` rejects anything outside the
+#             common subset; see crates/core/src/normalize.rs for the exact subset.
+# class       the plan's class for the rule (timestamp, id, csrf, nonce, asset, build, epoch)
+#
+# Order matters and is the order below: timestamps first (an ISO instant contains digit runs that a
+# later hash rule would otherwise eat), then ids, then the rest.
+#
+# Note on lookarounds: none are used. Rust's `regex` crate has no lookaround support at all, so a
+# rule written with one would compile only in the driver -- and a rule that only one engine applies
+# is worse than no rule, because the two would disagree about what a run observed.
+
+# --- ISO-8601 timestamps -------------------------------------------------------------
+# With or without fractional seconds and a zone. The `T` may be a space in some serializers, which
+# is still ISO-8601-adjacent and appears in SQL timestamps.
+[[rules]]
+id = "iso-8601"
+class = "timestamp"
+regex = '\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?'
+token = "<ts>"
+
+# An HTTP date, RFC 1123: `Wed, 21 Oct 2026 07:28:00 GMT`.
+[[rules]]
+id = "http-date"
+class = "timestamp"
+regex = '[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT'
+token = "<ts>"
+
+# --- Epoch numbers -------------------------------------------------------------------
+# Epoch values are normalized ONLY where a field name says the value is a time. A bare 10- or
+# 13-digit number is not a timestamp: it is also an order number, a phone number, an amount in cents
+# or a row count, and masking those would hide exactly the differences the checks compare (a
+# round-trip's total, a list's count, a day's revenue). The scope is the name, never the shape.
+#
+# A JSON field named `*_at`, `*time*` or `ts`, whose value is a number or a quoted number.
+[[rules]]
+id = "epoch-field-name"
+class = "epoch"
+regex = '("(?:[A-Za-z0-9_]*_at|[A-Za-z0-9_]*time[A-Za-z0-9_]*|ts)"\s*:\s*)(?:\d{10,13}|"\d{10,13}")'
+token = '$1"<epoch>"'
+
+# The same names as a query parameter: `?ts=1729451234`, `?created_at=1729451234`. Only the named
+# key is scoped, so `?order=1700000000123` is left alone.
+[[rules]]
+id = "epoch-query-name"
+class = "epoch"
+regex = '([?&](?:[A-Za-z0-9_]*_at|[A-Za-z0-9_]*time[A-Za-z0-9_]*|ts)=)\d{10,13}'
+token = '$1<epoch>'
+
+# --- Identifiers ---------------------------------------------------------------------
+# A UUID of any version 1-7 (and 8, which is reserved but appears). The version nibble is any hex
+# digit, so a future version is still normalized rather than leaking into a hash.
+[[rules]]
+id = "uuid"
+class = "id"
+regex = '\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'
+token = "<uuid>"
+
+# A ULID: 26 characters of Crockford base32. Every character in that alphabet is a word character,
+# so `\b` bounds it on both sides.
+[[rules]]
+id = "ulid"
+class = "id"
+regex = '\b[0-9A-HJKMNP-TV-Z]{26}\b'
+token = "<ulid>"
+
+# A nanoid: 21 characters of the URL-safe alphabet, normalized ONLY in an id-named field or an
+# id-named query/attribute key. The shape alone is not enough: 21 characters with one uppercase,
+# digit, `_` or `-` is also a product code, a SKU or a base64 fragment, and masking every one of them
+# would erase values a check compares. The scope is the name, never the shape.
+#
+# Within that scope the alternation is generated, one branch per position of the special character,
+# because the rule needs "21 of these characters, at least one of them not a plain lowercase letter"
+# and neither engine can express that without a lookahead: Rust's `regex` crate has none. Spelled any
+# other way the rule either misses every real nanoid or eats a 21-letter English word
+# (`incomprehensibilities` is 21). Every branch is exactly 21 characters.
+#
+# A JSON field: `"id": "V1StGXR8_Z5jdHi6B-myT"`, `"session_key": "..."`, `"token": "..."`.
+[[rules]]
+id = "nanoid-json-field"
+class = "id"
+regex = '("[A-Za-z0-9_]*(?:id|Id|ID|key|token|slug)"\s*:\s*")(?:[A-Z0-9_-][A-Za-z0-9_-]{20}|[A-Za-z0-9_-]{1}[A-Z0-9_-][A-Za-z0-9_-]{19}|[A-Za-z0-9_-]{2}[A-Z0-9_-][A-Za-z0-9_-]{18}|[A-Za-z0-9_-]{3}[A-Z0-9_-][A-Za-z0-9_-]{17}|[A-Za-z0-9_-]{4}[A-Z0-9_-][A-Za-z0-9_-]{16}|[A-Za-z0-9_-]{5}[A-Z0-9_-][A-Za-z0-9_-]{15}|[A-Za-z0-9_-]{6}[A-Z0-9_-][A-Za-z0-9_-]{14}|[A-Za-z0-9_-]{7}[A-Z0-9_-][A-Za-z0-9_-]{13}|[A-Za-z0-9_-]{8}[A-Z0-9_-][A-Za-z0-9_-]{12}|[A-Za-z0-9_-]{9}[A-Z0-9_-][A-Za-z0-9_-]{11}|[A-Za-z0-9_-]{10}[A-Z0-9_-][A-Za-z0-9_-]{10}|[A-Za-z0-9_-]{11}[A-Z0-9_-][A-Za-z0-9_-]{9}|[A-Za-z0-9_-]{12}[A-Z0-9_-][A-Za-z0-9_-]{8}|[A-Za-z0-9_-]{13}[A-Z0-9_-][A-Za-z0-9_-]{7}|[A-Za-z0-9_-]{14}[A-Z0-9_-][A-Za-z0-9_-]{6}|[A-Za-z0-9_-]{15}[A-Z0-9_-][A-Za-z0-9_-]{5}|[A-Za-z0-9_-]{16}[A-Z0-9_-][A-Za-z0-9_-]{4}|[A-Za-z0-9_-]{17}[A-Z0-9_-][A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{18}[A-Z0-9_-][A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{19}[A-Z0-9_-][A-Za-z0-9_-]{1}|[A-Za-z0-9_-]{20}[A-Z0-9_-])(")'
+token = '$1<nanoid>$2'
+
+# A query or attribute key: `?session_id=V1StGXR8_Z5jdHi6B-myT`, `data-id="..."`.
+[[rules]]
+id = "nanoid-query-key"
+class = "id"
+regex = '([?&][A-Za-z0-9_]*(?:id|Id)=)(?:[A-Z0-9_-][A-Za-z0-9_-]{20}|[A-Za-z0-9_-]{1}[A-Z0-9_-][A-Za-z0-9_-]{19}|[A-Za-z0-9_-]{2}[A-Z0-9_-][A-Za-z0-9_-]{18}|[A-Za-z0-9_-]{3}[A-Z0-9_-][A-Za-z0-9_-]{17}|[A-Za-z0-9_-]{4}[A-Z0-9_-][A-Za-z0-9_-]{16}|[A-Za-z0-9_-]{5}[A-Z0-9_-][A-Za-z0-9_-]{15}|[A-Za-z0-9_-]{6}[A-Z0-9_-][A-Za-z0-9_-]{14}|[A-Za-z0-9_-]{7}[A-Z0-9_-][A-Za-z0-9_-]{13}|[A-Za-z0-9_-]{8}[A-Z0-9_-][A-Za-z0-9_-]{12}|[A-Za-z0-9_-]{9}[A-Z0-9_-][A-Za-z0-9_-]{11}|[A-Za-z0-9_-]{10}[A-Z0-9_-][A-Za-z0-9_-]{10}|[A-Za-z0-9_-]{11}[A-Z0-9_-][A-Za-z0-9_-]{9}|[A-Za-z0-9_-]{12}[A-Z0-9_-][A-Za-z0-9_-]{8}|[A-Za-z0-9_-]{13}[A-Z0-9_-][A-Za-z0-9_-]{7}|[A-Za-z0-9_-]{14}[A-Z0-9_-][A-Za-z0-9_-]{6}|[A-Za-z0-9_-]{15}[A-Z0-9_-][A-Za-z0-9_-]{5}|[A-Za-z0-9_-]{16}[A-Z0-9_-][A-Za-z0-9_-]{4}|[A-Za-z0-9_-]{17}[A-Z0-9_-][A-Za-z0-9_-]{3}|[A-Za-z0-9_-]{18}[A-Z0-9_-][A-Za-z0-9_-]{2}|[A-Za-z0-9_-]{19}[A-Z0-9_-][A-Za-z0-9_-]{1}|[A-Za-z0-9_-]{20}[A-Z0-9_-])'
+token = '$1<nanoid>'
+
+# --- CSRF, nonce and authenticity tokens ---------------------------------------------
+# A hidden form field: `<input type="hidden" name="csrf_token" value="...">`. One rule per
+# delimiter shape, because the value ends at a different character in each.
+[[rules]]
+id = "csrf-hidden-input"
+class = "csrf"
+regex = '(name="(?:csrf|xsrf|authenticity|_token)[^"]*"[^>]*?value=")([^"]*)(")'
+token = '$1<csrf>$3'
+
+# A meta tag: `<meta name="csrf-token" content="...">`. Rails writes this one.
+[[rules]]
+id = "csrf-meta"
+class = "csrf"
+regex = '(<meta[^>]*name="(?:csrf-token|csrf-param|xsrf-token)"[^>]*content=")([^"]*)(")'
+token = '$1<csrf>$3'
+
+# A JSON field: `"csrfToken": "..."`, `"csrf_token": "..."`, `"_csrf": "..."`. The casing is
+# spelled out rather than left to a global flag, which the shared subset does not have: Rails writes
+# `csrf-token`, Spring writes `csrfToken`, and the first version of this rule only matched the
+# lowercase form -- so a Spring app's token went into the hash and two runs hashed differently.
+[[rules]]
+id = "csrf-json"
+class = "csrf"
+regex = '("_?(?:csrf|xsrf|authenticity)(?:[-_]?[Tt]oken)?[\w-]*"\s*:\s*")([^"]*)(")'
+token = '$1<csrf>$3'
+
+# A nonce attribute: `nonce="abc123"` on a script tag or a CSP header.
+[[rules]]
+id = "nonce-attribute"
+class = "nonce"
+regex = '(\bnonce=")([^"]*)(")'
+token = '$1<nonce>$3'
+
+# A nonce query value: `?nonce=abc123`.
+[[rules]]
+id = "nonce-query"
+class = "nonce"
+regex = '([?&]nonce=)[^&"\s]+'
+token = '$1<nonce>'
+
+# --- Build ids and hashed asset names ------------------------------------------------
+# A hashed asset name: `main.3f2a9c1b.js`, `app.9d8c7b6a5f.css`. The hash sits between the last dot
+# and the extension and is at least 8 hex characters, so `jquery.min.js` is not a hash.
+[[rules]]
+id = "hashed-asset"
+class = "asset"
+regex = '([A-Za-z0-9_-]+)\.([0-9a-f]{8,})\.(js|mjs|cjs|css|woff2?|ttf|otf|svg|png|jpe?g|gif|webp|avif|map)'
+token = '$1.<asset>.$3'
+
+# Next.js build id in a path: `/_next/static/<buildId>/`.
+[[rules]]
+id = "next-build-path"
+class = "build"
+regex = '(/_next/static/)([^/"?]+)(/)'
+token = '$1<build-id>$3'
+
+# Next.js build id as a field, in the inline `__NEXT_DATA__` payload.
+[[rules]]
+id = "next-build-field"
+class = "build"
+regex = '("buildId"\s*:\s*")([^"]*)(")'
+token = '$1<build-id>$3'
+
+# --- Cache-busting query values -------------------------------------------------------
+[[rules]]
+id = "cache-bust"
+class = "asset"
+regex = '([?&](?:v|_|t|cachebust)=)[^&"\s]+'
+token = '$1<bust>'

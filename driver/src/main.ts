@@ -131,6 +131,11 @@ async function dispatch(
       await emit(resultOf({ kind: "login", ...outcome }));
       return;
     }
+    case "observe_idle": {
+      const idle = await context.observeIdle(command.ms);
+      await emit(resultOf({ kind: "idle", ...idle }));
+      return;
+    }
     case "snapshot_dom": {
       const snapshot = await context.snapshotDom();
       // A snapshot is a question about the page, not an effect, so it answers as a result and

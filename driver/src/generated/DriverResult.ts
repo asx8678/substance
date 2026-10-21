@@ -47,7 +47,19 @@ screen: string,
 /**
  * One entry per violated rule, in the order axe reported them.
  */
-violations: Array<AxeViolation>, } | { "kind": "login", 
+violations: Array<AxeViolation>, } | { "kind": "idle", 
+/**
+ * The path the watch ran on, without query or fragment.
+ */
+screen: string, 
+/**
+ * The request patterns it saw, as `METHOD /templated/path`, sorted and deduplicated.
+ */
+patterns: Array<string>, 
+/**
+ * WebSocket and EventSource pings, as `METHOD url` with the URL templated.
+ */
+pings: Array<string>, } | { "kind": "login", 
 /**
  * Browser storage after the login, in the same shape a record part reports.
  */

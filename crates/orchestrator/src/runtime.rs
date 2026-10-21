@@ -174,6 +174,22 @@ pub struct RuntimeOutcome {
     pub mail_http_port: Option<u16>,
     /// The SMTP port the app was told to send to, recorded so a reader can see it was wired up.
     pub mail_smtp_port: Option<u16>,
+    /// What each screen does with no action, keyed by route (M3-T05).
+    ///
+    /// Written to `idle_patterns.json` so a record can be assembled by excluding exactly the traffic
+    /// the baseline saw. Empty in this build: the baseline is taken by a driver command
+    /// (`observe_idle`), and the driver is spawned by the crawler in M4-T01, not by this stage. An
+    /// empty map excludes nothing, which is the honest default rather than a claim of quiet.
+    pub idle: BTreeMap<String, IdleBaseline>,
+}
+
+/// One screen's idle baseline: what the page does on its own.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct IdleBaseline {
+    /// Request patterns, as `METHOD /templated/path`, sorted and deduplicated.
+    pub patterns: Vec<String>,
+    /// Socket pings, as `WS /templated/path`, sorted.
+    pub pings: Vec<String>,
 }
 
 /// One re-run of the migrate command.

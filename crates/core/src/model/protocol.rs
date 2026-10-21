@@ -41,6 +41,11 @@ pub enum DriverCommand {
     Trace(TraceCommand),
     /// Log in through the UI or the API.
     Login(LoginCommand),
+    /// Watch an already-settled screen for a while without acting, for the idle baseline.
+    ObserveIdle {
+        /// How long to watch, in milliseconds.
+        ms: u32,
+    },
     /// Dispose of the context.
     CloseContext {},
 }
@@ -67,7 +72,11 @@ pub struct OpenContext {
     pub success_selectors: Vec<String>,
     /// Extra error selectors from `[signals]`.
     pub error_selectors: Vec<String>,
-    /// Request patterns that belong to the idle baseline.
+    /// Request patterns that belong to the idle baseline, as `METHOD /templated/path`.
+    ///
+    /// Templates rather than regexes: the baseline records a shape (a poll whose id changes every
+    /// time), and a regex built from that shape would also match a real request. The settle counter
+    /// compares method plus templated path.
     pub idle_patterns: Vec<String>,
     /// Toast containers from `rules/signals.toml`, with the attribute that names their kind.
     pub toast_containers: Vec<ToastContainer>,
@@ -236,6 +245,15 @@ pub enum DriverResult {
         screen: String,
         /// One entry per violated rule, in the order axe reported them.
         violations: Vec<AxeViolation>,
+    },
+    /// What the screen did with no action, for the idle baseline.
+    Idle {
+        /// The path the watch ran on, without query or fragment.
+        screen: String,
+        /// The request patterns it saw, as `METHOD /templated/path`, sorted and deduplicated.
+        patterns: Vec<String>,
+        /// WebSocket and EventSource pings, as `METHOD url` with the URL templated.
+        pings: Vec<String>,
     },
     /// What a login changed, for the session the recorder will reuse.
     Login {

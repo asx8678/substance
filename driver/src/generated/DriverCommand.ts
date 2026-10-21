@@ -13,4 +13,8 @@ export type DriverCommand = { "cmd": "open_context" } & OpenContext | { "cmd": "
 /**
  * The URL to load.
  */
-url: string, } | { "cmd": "list_controls", } | { "cmd": "act" } & ActCommand | { "cmd": "route" } & RouteCommand | { "cmd": "clock" } & ClockCommand | { "cmd": "snapshot_dom", } | { "cmd": "axe", } | { "cmd": "layout", } | { "cmd": "trace" } & TraceCommand | { "cmd": "login" } & LoginCommand | { "cmd": "close_context", };
+url: string, } | { "cmd": "list_controls", } | { "cmd": "act" } & ActCommand | { "cmd": "route" } & RouteCommand | { "cmd": "clock" } & ClockCommand | { "cmd": "snapshot_dom", } | { "cmd": "axe", } | { "cmd": "layout", } | { "cmd": "trace" } & TraceCommand | { "cmd": "login" } & LoginCommand | { "cmd": "observe_idle", 
+/**
+ * How long to watch, in milliseconds.
+ */
+ms: number, } | { "cmd": "close_context", };

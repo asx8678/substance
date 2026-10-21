@@ -22,9 +22,22 @@ status: number | null,
  */
 req_body: BlobRef | null, 
 /**
+ * The lookup key of the request body's normalized form, next to the raw blob.
+ *
+ * The raw bytes are what was sent; this is what they hash to once the volatile values are
+ * replaced. Two runs whose responses differ only in a timestamp refer to different raw blobs but
+ * the same normalized hash, which is what makes them comparable without re-reading the blob
+ * (M3-T05).
+ */
+req_normalized: string | null, 
+/**
  * The response body, as a blob.
  */
 res_body: BlobRef | null, 
+/**
+ * The lookup key of the response body's normalized form, next to the raw blob.
+ */
+res_normalized: string | null, 
 /**
  * Why the request failed, when it was aborted or blocked.
  */

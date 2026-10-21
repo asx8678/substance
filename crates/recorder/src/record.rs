@@ -23,7 +23,8 @@ use std::path::{Path, PathBuf};
 use substance_core::hash::canonical_json_pretty_value;
 use substance_core::ids::{RecordId, RunId};
 use substance_core::model::{
-    DbDelta, EffectRecord, EgressEntry, EmailEntry, Logs, Measured, RecordPart, RowCounts, Timing,
+    DbDelta, EffectRecord, EgressEntry, EmailEntry, Logs, Measured, NetEntry, RecordPart,
+    RowCounts, Timing,
 };
 use substance_runner::BlobStore;
 
@@ -57,6 +58,9 @@ pub enum RecordError {
     /// The log rules do not compile, which is a bug in the data file.
     #[error(transparent)]
     Rules(#[from] crate::logs::RuleError),
+    /// The normalization rules do not load, which is a bug in the data file.
+    #[error("normalization rules: {0}")]
+    Normalize(String),
     /// A log window could not be read.
     #[error(transparent)]
     Logs(#[from] crate::logs::LogError),
@@ -127,6 +131,12 @@ pub struct Observed {
     pub email: Option<Vec<EmailEntry>>,
     /// Why the email channel was unavailable, when it was.
     pub email_reason: Option<String>,
+    /// The idle baseline's patterns for this screen, as `METHOD /templated/path`.
+    ///
+    /// Requests matching one are left out of the record: they are what the page does with no action,
+    /// and a record that named them would make two runs of the same action differ whenever a poll
+    /// happened to fire. Empty when no baseline was taken, which excludes nothing (M3-T05).
+    pub idle_patterns: Vec<String>,
     /// How long the action took to settle.
     pub timing: Timing,
 }
@@ -150,6 +160,7 @@ impl Observed {
             egress_reason: None,
             email: None,
             email_reason: None,
+            idle_patterns: Vec::new(),
             timing: Timing {
                 settle_ms: 0,
                 timed_out: false,
@@ -370,6 +381,11 @@ impl RecordStore {
             }
         }
 
+        // The idle baseline subtracted: a poll the page does on its own is not an effect of this
+        // action, and keeping it would make the record depend on how many polls fit in the window.
+        let net = exclude_idle(&part.net, &observed.idle_patterns);
+        let net = normalized_bodies(&self.blobs, net)?;
+
         Ok(EffectRecord {
             id: context.id(),
             run_id: context.run_id.clone(),
@@ -384,7 +400,7 @@ impl RecordStore {
             // record rather than a channel that could not be watched.
             injected: substance_core::model::Injected { failure: None },
             ui: part.ui.clone(),
-            net: part.net.clone(),
+            net,
             ws: part.ws.clone(),
             storage: part.storage.clone(),
             db,
@@ -405,6 +421,58 @@ impl RecordStore {
             timing: observed.timing.clone(),
         })
     }
+}
+
+/// The requests the record keeps: the driver's window minus what the idle baseline owns.
+///
+/// The match is on method plus a templated path, the same rule the settle counter uses. Sharing it
+/// is the point: a request the settle rule ignored must not reappear in the record, or two runs that
+/// settled identically would still differ in their bytes.
+#[must_use]
+pub fn exclude_idle(entries: &[NetEntry], idle_patterns: &[String]) -> Vec<NetEntry> {
+    if idle_patterns.is_empty() {
+        return entries.to_vec();
+    }
+    entries
+        .iter()
+        .filter(|entry| {
+            let templated = substance_core::normalize::template_of(&entry.path);
+            let key = format!("{} {templated}", entry.method.to_uppercase());
+            !substance_core::normalize::matches_idle(idle_patterns, &key)
+        })
+        .cloned()
+        .collect()
+}
+
+/// Fills each entry's normalized hashes by reading its raw bodies back from the store.
+///
+/// Read back rather than carried in the entry: the body's bytes live in the blob store once, and a
+/// second copy in the record would double the run's size for a value that is derived anyway. A body
+/// whose blob is missing leaves its hash `None` rather than failing the record: the raw reference is
+/// still evidence, and a record that refused to be written would lose every other channel with it.
+fn normalized_bodies(
+    blobs: &BlobStore,
+    entries: Vec<NetEntry>,
+) -> Result<Vec<NetEntry>, RecordError> {
+    let normalizer = substance_core::normalize::Normalizer::shared()
+        .map_err(|error| RecordError::Normalize(error.to_string()))?;
+    let mut out = Vec::with_capacity(entries.len());
+    for mut entry in entries {
+        entry.req_normalized =
+            text_of(blobs, entry.req_body.as_ref()).map(|text| normalizer.hash(&text));
+        entry.res_normalized =
+            text_of(blobs, entry.res_body.as_ref()).map(|text| normalizer.hash(&text));
+        out.push(entry);
+    }
+    Ok(out)
+}
+
+/// A body blob's text, when it is one and it is there.
+fn text_of(blobs: &BlobStore, reference: Option<&substance_core::BlobRef>) -> Option<String> {
+    let reference = reference?;
+    let path = blobs.path_of(reference).ok()?;
+    let bytes = std::fs::read(path).ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// The egress entries for a window, from what the proxy observed.

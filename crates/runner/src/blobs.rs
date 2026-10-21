@@ -15,6 +15,9 @@ use substance_core::hash::sha256;
 /// The directory every blob lives under, relative to the run directory.
 const BLOB_DIR: &str = "blobs/sha256";
 
+/// Where a body's normalized form lives, named by its hash.
+const NORMALIZED_DIR: &str = "blobs/normalized";
+
 /// Why a blob could not be written or read.
 #[derive(Debug, thiserror::Error)]
 pub enum BlobError {
@@ -90,6 +93,51 @@ impl BlobStore {
         })?;
         fs::rename(&temporary, &path).map_err(|source| BlobError::Io { path, source })?;
         Ok(reference)
+    }
+
+    /// Writes a body and the hash of its normalized form, returning both.
+    ///
+    /// The raw bytes go in the blob store as always; the normalized form goes in a parallel tree
+    /// (`blobs/normalized/<first 2 hex>/<64 hex>`) whose *name* is the hash. Keeping the normalized
+    /// text next to the raw one rather than only its hash is what lets a reader see what a diff was
+    /// actually comparing: two records whose hashes match can be checked by reading one file, and a
+    /// mismatch can be diagnosed without re-running the normalizer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlobError::Io`] when either write fails.
+    pub fn put_with_normalized(
+        &self,
+        bytes: &[u8],
+        normalizer: &substance_core::normalize::Normalizer,
+    ) -> Result<(BlobRef, String), BlobError> {
+        let reference = self.put(bytes)?;
+        let text = String::from_utf8_lossy(bytes);
+        let normalized = normalizer.apply(&text);
+        let hash = normalizer.hash(&text);
+        let digest = hash.strip_prefix(BlobRef::PREFIX).unwrap_or(&hash);
+        // The digest is written by `hash`, which uses the same hex form and sharding as a `BlobRef`,
+        // so the path has the same shape as a blob's.
+        let path = self
+            .root
+            .join(NORMALIZED_DIR)
+            .join(digest.get(..2).unwrap_or("00"))
+            .join(digest);
+        if !path.is_file() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(|source| BlobError::Io {
+                    path: parent.to_path_buf(),
+                    source,
+                })?;
+            }
+            let temporary = path.with_extension("partial");
+            fs::write(&temporary, normalized.as_bytes()).map_err(|source| BlobError::Io {
+                path: temporary.clone(),
+                source,
+            })?;
+            fs::rename(&temporary, &path).map_err(|source| BlobError::Io { path, source })?;
+        }
+        Ok((reference, hash))
     }
 
     /// Reads the bytes a reference names.

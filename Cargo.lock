@@ -2879,6 +2879,7 @@ version = "0.0.0"
 dependencies = [
  "data-encoding",
  "rand_chacha",
+ "regex",
  "schemars",
  "serde",
  "serde_json",

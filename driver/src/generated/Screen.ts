@@ -15,4 +15,16 @@ depth: number,
 /**
  * Whether the screen needs a session.
  */
-requires_auth: boolean, };
+requires_auth: boolean, 
+/**
+ * What the screen does on its own, as `METHOD /templated/path`, sorted and deduplicated.
+ *
+ * Recorded by the idle baseline (M3-T05) and excluded from records and from the settle
+ * in-flight count: a page that polls would otherwise never settle, and every record would name
+ * a request nothing in the run caused. Empty for a screen the crawl never watched.
+ */
+idle_patterns: Array<string>, 
+/**
+ * Socket pings the baseline saw while idle, as `WS /templated/path`, sorted.
+ */
+idle_pings: Array<string>, };

@@ -11,6 +11,7 @@ pub mod deps;
 pub mod hash;
 pub mod ids;
 pub mod model;
+pub mod normalize;
 pub mod parts;
 pub mod provenance;
 pub mod registry;

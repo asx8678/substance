@@ -43,7 +43,11 @@ success_selectors: Array<string>,
  */
 error_selectors: Array<string>, 
 /**
- * Request patterns that belong to the idle baseline.
+ * Request patterns that belong to the idle baseline, as `METHOD /templated/path`.
+ *
+ * Templates rather than regexes: the baseline records a shape (a poll whose id changes every
+ * time), and a regex built from that shape would also match a real request. The settle counter
+ * compares method plus templated path.
  */
 idle_patterns: Array<string>, 
 /**

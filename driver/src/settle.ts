@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 
 import type { Logger } from "./log.js";
+import { matchesIdle, templateOf } from "./normalize.js";
 
 /**
  * The page-side state the settle rule reads.
@@ -37,7 +38,15 @@ export class Settler {
     private readonly page: Page,
     private readonly quietMs: number,
     private readonly timeoutMs: number,
-    private readonly idlePatterns: readonly RegExp[],
+    /**
+     * The idle baseline's patterns, as `METHOD /templated/path`.
+     *
+     * Templates rather than regexes: the baseline records a shape (a poll whose id changes every
+     * time), and a regex built from one would match the shape of a real request too. The match is
+     * on method plus templated path, so `GET /api/notifications?since=:id` ignores exactly the
+     * polling the baseline saw and not the `POST` next to it.
+     */
+    private readonly idlePatterns: readonly string[],
     private readonly log: Logger,
   ) {}
 
@@ -45,13 +54,13 @@ export class Settler {
   start(): void {
     this.inFlight = 0;
 
-    const onRequest = (request: { url: () => string }): void => {
-      if (!this.isIdle(request.url())) {
+    const onRequest = (request: { method: () => string; url: () => string }): void => {
+      if (!this.isIdle(request.method(), request.url())) {
         this.inFlight += 1;
       }
     };
-    const onDone = (request: { url: () => string }): void => {
-      if (!this.isIdle(request.url())) {
+    const onDone = (request: { method: () => string; url: () => string }): void => {
+      if (!this.isIdle(request.method(), request.url())) {
         this.inFlight = Math.max(0, this.inFlight - 1);
       }
     };
@@ -129,9 +138,21 @@ export class Settler {
     return since ?? this.quietMs;
   }
 
-  /** Whether a URL belongs to the idle baseline. */
-  private isIdle(url: string): boolean {
-    return this.idlePatterns.some((pattern) => pattern.test(url));
+  /**
+   * Whether a request belongs to the idle baseline.
+   *
+   * The URL's path is templated the same way the baseline templated it, so a poll whose id changed
+   * between the baseline and this action still matches.
+   */
+  private isIdle(method: string, url: string): boolean {
+    let path: string;
+    try {
+      const parsed = new URL(url);
+      path = `${parsed.pathname}${parsed.search}`;
+    } catch {
+      path = url;
+    }
+    return matchesIdle(this.idlePatterns, method, templateOf(path));
   }
 }
 

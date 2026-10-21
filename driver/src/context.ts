@@ -17,7 +17,12 @@ import { measureBoxes, normalizedBodyHtml, walkControls, visibleTextMap } from "
 import type { LayoutBox } from "./generated/LayoutBox.js";
 import type { Control } from "./generated/Control.js";
 import { digest } from "./hash.js";
-import { normalize } from "./normalize.js";
+import { normalize, templateOf } from "./normalize.js";
+
+/** A set's entries, sorted: the ordering a record needs to be comparable across runs. */
+function sorted(entries: ReadonlySet<string>): string[] {
+  return [...entries].sort();
+}
 
 /** What an observed action produced. */
 export interface ActionRecord {
@@ -42,7 +47,7 @@ export class DriverContext {
   private readonly secrets = new Set<string>();
   private readonly blobs: Blobs;
   private readonly patterns: readonly NormalizePattern[];
-  private readonly idlePatterns: RegExp[];
+  private readonly idlePatterns: string[];
   private readonly quietMs: number;
   private readonly timeoutMs: number;
 
@@ -53,7 +58,9 @@ export class DriverContext {
   ) {
     this.blobs = blobs;
     this.patterns = open.normalize;
-    this.idlePatterns = open.idle_patterns.map((pattern) => new RegExp(pattern));
+    // Patterns as written by the idle baseline: `METHOD /templated/path`, not regexes (see
+    // `Settler`). They stay strings so the match can template this request the same way.
+    this.idlePatterns = open.idle_patterns;
     this.quietMs = open.settle_quiet_ms;
     this.timeoutMs = open.settle_timeout_ms;
   }
@@ -150,6 +157,58 @@ export class DriverContext {
   async layout(): Promise<{ screen: string; boxes: LayoutBox[] }> {
     const { page } = this.must();
     return { screen: this.screenOf(page.url()), boxes: await measureBoxes(page) };
+  }
+
+  /**
+   * Watches an already-settled screen for `ms` without acting: the idle baseline.
+   *
+   * The plan's rule is settle, then watch with no action. What comes back is what the page does on
+   * its own -- a poll, an analytics ping, a heartbeat -- so the settle rule can ignore it later.
+   * Without this, a page that polls every two seconds never has "no requests in flight" and every
+   * action on it settles by the cap.
+   *
+   * Patterns are method plus a templated path, sorted and deduplicated: a poll whose id or timestamp
+   * changes every time is one pattern, not one per request. The watch itself is a plain wait rather
+   * than a new network capture, so it cannot disturb the settle counter of an action in flight -- it
+   * is only ever called after settle.
+   */
+  async observeIdle(ms: number): Promise<{
+    screen: string;
+    patterns: string[];
+    pings: string[];
+  }> {
+    const { page } = this.must();
+    const patterns = new Set<string>();
+    const pings = new Set<string>();
+    const onRequest = (request: { method: () => string; url: () => string; resourceType: () => string }): void => {
+      const method = request.method().toUpperCase();
+      const path = this.pathOnly(request.url());
+      const kind = request.resourceType();
+      // A document or a script is the page loading, which is not idle traffic: it happens because
+      // something acted, and ignoring it later would hide a real request.
+      if (kind === "document" || kind === "script" || kind === "stylesheet" || kind === "font") {
+        return;
+      }
+      patterns.add(`${method} ${templateOf(path)}`);
+    };
+    const onWebSocket = (socket: { url: () => string }): void => {
+      pings.add(`WS ${templateOf(this.pathOnly(socket.url()))}`);
+    };
+    page.on("request", onRequest);
+    page.on("websocket", onWebSocket);
+    try {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+      });
+    } finally {
+      page.off("request", onRequest);
+      page.off("websocket", onWebSocket);
+    }
+    return {
+      screen: this.screenOf(page.url()),
+      patterns: sorted(patterns),
+      pings: sorted(pings),
+    };
   }
 
   /** The normalized route of the current page. */
@@ -313,6 +372,16 @@ export class DriverContext {
   /** The normalized DOM hash of the current page. */
   private async snapshot(page: Page): Promise<string> {
     return digest(normalize(await normalizedBodyHtml(page), this.patterns));
+  }
+
+  /** A URL's path and query, as the browser saw it. */
+  private pathOnly(url: string): string {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return url;
+    }
   }
 
   /** The route of a URL, with ids and query values normalized away by the project's rules. */

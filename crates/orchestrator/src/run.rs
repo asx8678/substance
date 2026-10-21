@@ -309,6 +309,9 @@ async fn run_stages(
             // appeared only on a full run would make B13's absence indistinguishable from a
             // missing file.
             run_dir.write_json("canaries.json", &outcome.canaries)?;
+            // The idle baseline is written even when it is empty: a missing file and "the page does
+            // nothing on its own" are different claims, and a record's exclusions must be readable.
+            run_dir.write_json("idle_patterns.json", &outcome.idle)?;
             // O01's exec part, O02, O03 and O04 are judged here, from what the stage observed. O05
             // came from triage, because a Dockerfile is a file in the commit and needs no app.
             runtime_verdicts = crate::operability::runtime_verdicts(&outcome);

@@ -39,6 +39,14 @@ pub struct Screen {
     pub depth: u32,
     /// Whether the screen needs a session.
     pub requires_auth: bool,
+    /// What the screen does on its own, as `METHOD /templated/path`, sorted and deduplicated.
+    ///
+    /// Recorded by the idle baseline (M3-T05) and excluded from records and from the settle
+    /// in-flight count: a page that polls would otherwise never settle, and every record would name
+    /// a request nothing in the run caused. Empty for a screen the crawl never watched.
+    pub idle_patterns: Vec<String>,
+    /// Socket pings the baseline saw while idle, as `WS /templated/path`, sorted.
+    pub idle_pings: Vec<String>,
 }
 
 /// One interactive control, with its selector candidates in preference order.

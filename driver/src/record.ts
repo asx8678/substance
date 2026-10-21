@@ -16,6 +16,7 @@ import type { Logs } from "./generated/Logs.js";
 import type { NetEntry } from "./generated/NetEntry.js";
 import type { NormalizePattern } from "./generated/NormalizePattern.js";
 import type { WsFrame } from "./generated/WsFrame.js";
+import { digest } from "./hash.js";
 import { normalize } from "./normalize.js";
 import { redactBody } from "./redact.js";
 
@@ -152,12 +153,21 @@ export class ActionCapture {
 
   private async onResponse(response: Response): Promise<void> {
     const request = response.request();
+    const reqBytes = request.postDataBuffer() ?? Buffer.alloc(0);
+    const reqRedacted = redactBody(reqBytes, this.secrets);
+    const reqBody = reqBytes.byteLength === 0 ? null : await this.blobs.put(reqRedacted);
+    const res = await this.safeBody(response);
     const entry: NetEntry = {
       method: request.method(),
       path: this.pathOf(request.url()),
       status: response.status(),
-      req_body: await this.blobOf(request.postDataBuffer()),
-      res_body: await this.safeBody(response),
+      req_body: reqBody,
+      // The normalized hash sits next to the raw blob: the bytes are what was sent, the hash is
+      // what they come to once volatile values are replaced. Both are needed -- a check reading a
+      // body wants the raw one, and two runs compare the hash (M3-T05).
+      req_normalized: this.normalizedHashOf(reqRedacted),
+      res_body: res.ref,
+      res_normalized: res.hash,
       failed: null,
     };
     this.net.push(entry);
@@ -165,13 +175,17 @@ export class ActionCapture {
 
   private async onRequestFailed(request: Request): Promise<void> {
     const failure = request.failure();
+    const reqBytes = request.postDataBuffer() ?? Buffer.alloc(0);
+    const reqRedacted = redactBody(reqBytes, this.secrets);
     this.net.push({
       method: request.method(),
       path: this.pathOf(request.url()),
       // No status: the request never completed, which the plan keeps as `null` rather than 0.
       status: null,
-      req_body: await this.blobOf(request.postDataBuffer()),
+      req_body: reqBytes.byteLength === 0 ? null : await this.blobs.put(reqRedacted),
+      req_normalized: this.normalizedHashOf(reqRedacted),
       res_body: null,
+      res_normalized: null,
       failed: failure === null ? "failed" : normalize(failure.errorText, this.patterns),
     });
   }
@@ -207,11 +221,33 @@ export class ActionCapture {
     this.frames.push({ url, direction, payload: ref, bytes });
   }
 
-  private async safeBody(response: Response): Promise<string | null> {
+  private async safeBody(response: Response): Promise<{ ref: string | null; hash: string | null }> {
     const body = await response.body().catch(() => null);
     // A redirect, a download or a streaming response has no readable body. That is not an
     // error: the status and the path are still evidence.
-    return body === null ? null : this.blobOf(body);
+    if (body === null || body.byteLength === 0) {
+      return { ref: null, hash: null };
+    }
+    // Both come from the one read: `Response.body()` is not a second chance at the bytes.
+    const redacted = redactBody(body, this.secrets);
+    return {
+      ref: await this.blobs.put(redacted),
+      hash: this.normalizedHashOf(redacted),
+    };
+  }
+
+  /**
+   * The hash of a body's normalized form.
+   *
+   * Takes bytes that were already redacted, so a hash never covers a value the run is trying not to
+   * keep. Computed here rather than in Rust so every body does not have to travel back over the
+   * protocol: the driver already holds the bytes.
+   */
+  private normalizedHashOf(bytes: Buffer): string | null {
+    if (bytes.byteLength === 0) {
+      return null;
+    }
+    return digest(normalize(bytes.toString("utf8"), this.patterns));
   }
 
   /** Stores a body, with every known secret replaced before it reaches the disk. */

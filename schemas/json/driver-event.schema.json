@@ -487,6 +487,13 @@
           ],
           "description": "The request body, as a blob."
         },
+        "req_normalized": {
+          "description": "The lookup key of the request body's normalized form, next to the raw blob.\n\nThe raw bytes are what was sent; this is what they hash to once the volatile values are\nreplaced. Two runs whose responses differ only in a timestamp refer to different raw blobs but\nthe same normalized hash, which is what makes them comparable without re-reading the blob\n(M3-T05).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "res_body": {
           "anyOf": [
             {
@@ -497,6 +504,13 @@
             }
           ],
           "description": "The response body, as a blob."
+        },
+        "res_normalized": {
+          "description": "The lookup key of the response body's normalized form, next to the raw blob.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "status": {
           "description": "The status code, absent when the request never completed.",
@@ -970,6 +984,40 @@
             "kind",
             "screen",
             "violations"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "What the screen did with no action, for the idle baseline.",
+          "properties": {
+            "kind": {
+              "const": "idle",
+              "type": "string"
+            },
+            "patterns": {
+              "description": "The request patterns it saw, as `METHOD /templated/path`, sorted and deduplicated.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "pings": {
+              "description": "WebSocket and EventSource pings, as `METHOD url` with the URL templated.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "screen": {
+              "description": "The path the watch ran on, without query or fragment.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "screen",
+            "patterns",
+            "pings"
           ],
           "type": "object"
         },

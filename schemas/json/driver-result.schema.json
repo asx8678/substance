@@ -379,6 +379,41 @@
     },
     {
       "additionalProperties": false,
+      "description": "What the screen did with no action, for the idle baseline.",
+      "properties": {
+        "kind": {
+          "const": "idle",
+          "type": "string"
+        },
+        "patterns": {
+          "description": "The request patterns it saw, as `METHOD /templated/path`, sorted and deduplicated.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pings": {
+          "description": "WebSocket and EventSource pings, as `METHOD url` with the URL templated.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "screen": {
+          "description": "The path the watch ran on, without query or fragment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "screen",
+        "patterns",
+        "pings"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
       "description": "What a login changed, for the session the recorder will reuse.",
       "properties": {
         "changed": {

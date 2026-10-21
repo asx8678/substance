@@ -84,7 +84,7 @@
           "type": "integer"
         },
         "idle_patterns": {
-          "description": "Request patterns that belong to the idle baseline.",
+          "description": "Request patterns that belong to the idle baseline, as `METHOD /templated/path`.\n\nTemplates rather than regexes: the baseline records a shape (a poll whose id changes every\ntime), and a regex built from that shape would also match a real request. The settle counter\ncompares method plus templated path.",
           "items": {
             "type": "string"
           },
@@ -442,6 +442,27 @@
       },
       "required": [
         "cmd"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Watch an already-settled screen for a while without acting, for the idle baseline.",
+      "properties": {
+        "cmd": {
+          "const": "observe_idle",
+          "type": "string"
+        },
+        "ms": {
+          "description": "How long to watch, in milliseconds.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cmd",
+        "ms"
       ],
       "type": "object"
     },

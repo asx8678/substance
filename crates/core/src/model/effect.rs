@@ -108,8 +108,17 @@ pub struct NetEntry {
     pub status: Option<u16>,
     /// The request body, as a blob.
     pub req_body: Option<BlobRef>,
+    /// The lookup key of the request body's normalized form, next to the raw blob.
+    ///
+    /// The raw bytes are what was sent; this is what they hash to once the volatile values are
+    /// replaced. Two runs whose responses differ only in a timestamp refer to different raw blobs but
+    /// the same normalized hash, which is what makes them comparable without re-reading the blob
+    /// (M3-T05).
+    pub req_normalized: Option<String>,
     /// The response body, as a blob.
     pub res_body: Option<BlobRef>,
+    /// The lookup key of the response body's normalized form, next to the raw blob.
+    pub res_normalized: Option<String>,
     /// Why the request failed, when it was aborted or blocked.
     pub failed: Option<String>,
 }

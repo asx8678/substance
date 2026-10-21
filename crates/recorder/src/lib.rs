@@ -2,6 +2,7 @@
 //! the record store and replay.
 
 pub mod changes;
+pub mod context;
 pub mod driver;
 pub mod logs;
 pub mod record;
