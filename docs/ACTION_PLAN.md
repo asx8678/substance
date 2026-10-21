@@ -2210,7 +2210,7 @@ Tick each task in the same commit that completes it.
 - [x] M0-T06 CLI skeleton
 - [x] M0-T07 Schema and TS generation
 - [x] M0-T08 Orchestrator, run dir, report v0
-- [ ] M0-T09 CI workflow
+- [x] M0-T09 CI workflow
 - [ ] M1-T01 Tool runner and external snapshots
 - [ ] M1-T02 Git engine
 - [ ] M1-T03 GitHub forge

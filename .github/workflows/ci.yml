@@ -1,0 +1,78 @@
+# CI: the standard checks of docs/ACTION_PLAN.md §1 (M0-T09).
+# No test steps: tests are excluded by ADR-0008.
+# M1-T12 adds a `dogfood` job and M3 adds a `driver` job.
+name: ci
+
+# Quoted, so a YAML 1.1 parser (which reads a bare `on` as the boolean true)
+# and GitHub's own parser agree on the trigger key.
+"on":
+  push:
+  pull_request:
+
+# Least privilege: every step only reads the repository.
+permissions:
+  contents: read
+
+# A new push to the same ref cancels the run it supersedes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # `--locked` everywhere, so a stale Cargo.lock fails instead of being updated.
+  CARGO_NET_RETRY: 3
+
+jobs:
+  rust:
+    name: rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pinned by commit: `git ls-remote https://github.com/actions/checkout refs/tags/v5.1.0`
+      # prints fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 (a lightweight tag, so no ^{} ref).
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # `rust-toolchain.toml` pins the channel and its components; rustup installs
+      # exactly that, so CI and a developer's machine use one compiler.
+      - name: Toolchain
+        run: |
+          rustup show active-toolchain || rustup toolchain install --no-self-update
+          rustc --version
+          cargo --version
+          rustup show active-toolchain
+
+      # Ripgrep is what scripts/guards.sh searches with.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
+
+      # Pinned by commit: `git ls-remote https://github.com/actions/cache refs/tags/v4.3.0`
+      # prints 0057852bfaa89a56745cba8c7296529d2fc39830 (a lightweight tag).
+      # Only the registry and git caches are kept: `target/` changes too often to pay for.
+      - name: Cache cargo registry
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      # C-RUST, verbatim from §1.
+      - name: C-RUST
+        run: cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo build --workspace --locked
+
+      # C-AGENT, verbatim from §1.
+      - name: C-AGENT
+        run: cargo clippy -p substance-agent --features agent --locked -- -D warnings
+
+      # C-GUARD, verbatim from §1.
+      - name: C-GUARD
+        run: scripts/guards.sh
+
+      # C-SCHEMA, verbatim from §1. The index equals HEAD here, so any uncommitted
+      # drift in schemas/ or driver/src/generated/ fails the job.
+      - name: C-SCHEMA
+        run: cargo run -q -p substance-cli -- schema export --out schemas && git add -N schemas driver/src/generated && git diff --exit-code -- schemas driver/src/generated
