@@ -55,7 +55,7 @@ use substance_core::Timestamp;
 
 use super::{
     Compare, Contributor, Forge, ForgeError, GitHubRepoRef, GitHubUser, Issue, IssueComment,
-    PullRequest, Release, RepoInfo, Review, Stargazer, Tag, WorkflowRun,
+    PullRequest, Release, RepoInfo, RepoSummary, Review, Stargazer, Tag, TreeEntry, WorkflowRun,
 };
 use crate::snapshot::{SnapshotError, SnapshotHttp, SnapshotKind, SnapshotRequest};
 use substance_core::clock::window_start;
@@ -602,6 +602,13 @@ struct WirePull {
     state: Option<String>,
     head: Option<WireBranch>,
     base: Option<WireBranch>,
+    #[serde(default)]
+    labels: Vec<WireLabel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WireLabel {
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -692,6 +699,29 @@ struct WireContributor {
 }
 
 #[derive(Debug, Deserialize)]
+struct WireRepoSummary {
+    name: Option<String>,
+    created_at: Option<String>,
+    fork: Option<bool>,
+    is_template: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WireTree {
+    #[serde(default)]
+    tree: Vec<WireTreeEntry>,
+    truncated: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WireTreeEntry {
+    path: Option<String>,
+    sha: Option<String>,
+    #[serde(rename = "type")]
+    kind: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct WireCompare {
     ahead_by: Option<u32>,
     behind_by: Option<u32>,
@@ -763,6 +793,18 @@ impl Forge for GitHub {
                 head_sha: pull.head.as_ref().and_then(|head| head.sha.clone()),
                 head_ref: pull.head.as_ref().and_then(|head| head.branch.clone()),
                 base_ref: pull.base.as_ref().and_then(|base| base.branch.clone()),
+                labels: {
+                    // Sorted, so two runs of one snapshot list the same order.
+                    let mut labels: Vec<String> = pull
+                        .labels
+                        .into_iter()
+                        .filter_map(|label| label.name)
+                        .filter(|name| !name.trim().is_empty())
+                        .collect();
+                    labels.sort();
+                    labels.dedup();
+                    labels
+                },
             })
             .collect();
         pulls.sort_by(|left, right| {
@@ -1043,6 +1085,77 @@ impl Forge for GitHub {
         let url = self.url(&format!("/users/{login}"));
         let wire: WireUser = self.fetch_one(&label, url).await?;
         Ok(wire.into_user())
+    }
+
+    async fn owner_repos(
+        &mut self,
+        since: Timestamp,
+        until: Timestamp,
+    ) -> Result<Vec<RepoSummary>, ForgeError> {
+        // One page: H19 is context, and a prolific owner would otherwise cost hundreds of
+        // requests to say something the first hundred already say. `affiliation=owner`
+        // excludes repositories the account only collaborates on, and `sort=created`
+        // descending makes the page hold the newest, which is the end H19 looks at.
+        let label = "owner repos";
+        let owner = self.repo.owner.clone();
+        let url = format!(
+            "{API_ROOT}/users/{owner}/repos?per_page={PER_PAGE}&page=1&sort=created&direction=desc&affiliation=owner"
+        );
+        let wire: Vec<WireRepoSummary> = self
+            .fetch_page::<WireRepoSummary>(label, url, crate::snapshot::JSON_ACCEPT, true)
+            .await?;
+        let mut repos: Vec<RepoSummary> = wire
+            .into_iter()
+            .filter_map(|entry| {
+                let name = entry.name?;
+                let created_at = timestamp(entry.created_at.as_deref());
+                // The window is applied here rather than by the API: `created:` would make
+                // the query text depend on `as_of`, and a replay compares URLs.
+                if let Some(created) = created_at
+                    && (created < since || created > until)
+                {
+                    return None;
+                }
+                Some(RepoSummary {
+                    name,
+                    created_at,
+                    fork: entry.fork.unwrap_or(false),
+                    template: entry.is_template.unwrap_or(false),
+                })
+            })
+            .collect();
+        repos.sort_by(|left, right| {
+            newest_first(left.created_at, right.created_at).then_with(|| left.name.cmp(&right.name))
+        });
+        Ok(repos)
+    }
+
+    async fn tree(&mut self, repo: &GitHubRepoRef) -> Result<Vec<TreeEntry>, ForgeError> {
+        // The recursive tree of the default branch: `HEAD` resolves to it, so no second
+        // request is needed to learn the branch name. A truncated tree is recorded, because
+        // H17's permille over part of a template would read as divergence.
+        let label = format!("tree {}", repo.slug());
+        let url = format!(
+            "{API_ROOT}/repos/{}/git/trees/HEAD?recursive=1",
+            repo.slug()
+        );
+        let wire: WireTree = self.fetch_one(&label, url).await?;
+        if wire.truncated.unwrap_or(false) {
+            self.note_capped(&label);
+        }
+        let mut entries: Vec<TreeEntry> = wire
+            .tree
+            .into_iter()
+            .filter(|entry| entry.kind.as_deref() == Some("blob"))
+            .filter_map(|entry| {
+                Some(TreeEntry {
+                    path: entry.path?,
+                    sha: entry.sha?,
+                })
+            })
+            .collect();
+        entries.sort_by(|left, right| left.path.cmp(&right.path));
+        Ok(entries)
     }
 
     async fn compare(&mut self, base: &str, head: &str) -> Result<Compare, ForgeError> {

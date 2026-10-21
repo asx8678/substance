@@ -245,6 +245,40 @@ impl GitRepo {
         Ok(paths)
     }
 
+    /// Every blob at `rev` with its SHA, sorted by path.
+    ///
+    /// `ls-tree -r` prints `<mode> <type> <sha>\t<path>`; the blob SHAs are what H17 compares
+    /// against a template's, and they are the same value the forge's tree API reports because
+    /// both are git's own object names.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError`] when `git ls-tree` fails or times out.
+    pub async fn blobs(&self, rev: &str) -> Result<Vec<(String, String)>, GitError> {
+        let args = vec![
+            OsString::from("ls-tree"),
+            OsString::from("-r"),
+            OsString::from("-z"),
+            OsString::from(rev),
+        ];
+        let stdout = self.run(GitCommand::ListTree, &args).await?;
+        let mut blobs: Vec<(String, String)> = stdout
+            .split('\0')
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| {
+                // `<mode> SP <type> SP <sha> TAB <path>`
+                let (header, path) = line.split_once('\t')?;
+                let mut fields = header.split(' ');
+                let _mode = fields.next()?;
+                let kind = fields.next()?;
+                let sha = fields.next()?;
+                (kind == "blob").then(|| (path.to_owned(), sha.to_owned()))
+            })
+            .collect();
+        blobs.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(blobs)
+    }
+
     /// Asks `git check-attr` about `paths`, in one call per chunk of arguments.
     ///
     /// The attributes are read from the tree at `rev` (`--source`), so an uncommitted

@@ -1,0 +1,12 @@
+# Paths and names that mark a test file (M1-T06, H22).
+#
+# One pattern per line; a line starting with `#` is a comment. A path matches when it
+# contains a directory segment listed here, or its file name matches a suffix pattern.
+# The list is the plan's, plus the two Python conventions it names.
+
+tests/
+__tests__/
+*.test.*
+*.spec.*
+test_*.py
+*_test.py

@@ -225,6 +225,8 @@ pub struct PullRequest {
     pub head_ref: Option<String>,
     /// The branch it targets.
     pub base_ref: Option<String>,
+    /// The labels, as their names, sorted. H13 reads the security label from here.
+    pub labels: Vec<String>,
 }
 
 /// One review of a pull request.
@@ -341,6 +343,28 @@ pub struct WorkflowRun {
     pub event: Option<String>,
     /// The workflow's name.
     pub name: Option<String>,
+}
+
+/// One repository as a listing reports it, for H19's context.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoSummary {
+    /// The repository's name.
+    pub name: String,
+    /// When it was created, server-side.
+    pub created_at: Option<Timestamp>,
+    /// Whether it is a fork. A fork is not a repository the owner created from nothing.
+    pub fork: bool,
+    /// Whether it is a template repository.
+    pub template: bool,
+}
+
+/// One blob in a tree, for H17's template comparison.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeEntry {
+    /// The path, repo-relative, forward slashes.
+    pub path: String,
+    /// The blob SHA: equal for identical content, whatever the branch.
+    pub sha: String,
 }
 
 /// One release.
@@ -500,6 +524,39 @@ pub trait Forge: Send + Sync {
     ///
     /// See [`ForgeError`].
     async fn user(&mut self, login: &str) -> Result<GitHubUser, ForgeError>;
+
+    /// The repository this client speaks for, so a check can name the owner.
+    ///
+    /// # Errors
+    ///
+    /// See [`ForgeError`].
+    fn repo_slug(&self) -> String {
+        self.repo_ref().slug()
+    }
+
+    /// The repositories the owner created in a window, for H19's repo-farm context.
+    ///
+    /// One page, newest first, because H19 asks a contextual question and must not spend a
+    /// repository-sized request budget on it.
+    ///
+    /// # Errors
+    ///
+    /// See [`ForgeError`].
+    async fn owner_repos(
+        &mut self,
+        since: Timestamp,
+        until: Timestamp,
+    ) -> Result<Vec<RepoSummary>, ForgeError>;
+
+    /// Every blob path and SHA in `repo`'s default-branch tree, for H17.
+    ///
+    /// H17 is the one check that reads another repository (the template), so this takes the
+    /// repository explicitly instead of using the client's own.
+    ///
+    /// # Errors
+    ///
+    /// See [`ForgeError`].
+    async fn tree(&mut self, repo: &GitHubRepoRef) -> Result<Vec<TreeEntry>, ForgeError>;
 
     /// Compares two commits, for telling a fork's own work from its upstream's.
     ///

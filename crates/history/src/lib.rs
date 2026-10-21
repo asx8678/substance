@@ -13,7 +13,8 @@ pub mod snapshot;
 
 pub use forge::{
     Compare, Contributor, Forge, ForgeError, GitHub, GitHubRepoRef, GitHubUser, Issue,
-    IssueComment, PullRequest, Release, RepoInfo, Review, Stargazer, Tag, WorkflowRun,
+    IssueComment, PullRequest, Release, RepoInfo, RepoSummary, Review, Stargazer, Tag, TreeEntry,
+    WorkflowRun,
 };
 pub use git::{
     AuthoredFile, AuthoredFilter, BlameCoverage, BlameLine, BlameMap, BlameReport, Commit,

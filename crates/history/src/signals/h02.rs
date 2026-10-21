@@ -119,6 +119,27 @@ pub fn active_weeks(input: &HistoryInput, _thresholds: &Thresholds) -> Judgment 
     judgment
 }
 
+/// The number of distinct active ISO weeks over the whole history, which is what H16 needs
+/// to judge a "production-ready" claim.
+///
+/// The same week arithmetic H02 uses, run without a window: a claim is about the project's
+/// whole life, not about the last year.
+#[must_use]
+pub fn active_weeks_all_time(input: &HistoryInput) -> u64 {
+    let mut weeks: BTreeSet<(i32, u8)> = BTreeSet::new();
+    for commit in input.human_commits() {
+        weeks.insert(iso_week(commit.author.at));
+    }
+    if let Ok(forge) = input.forge_or_reason() {
+        for pull in forge.merged_pulls() {
+            if let Some(merged_at) = pull.merged_at {
+                weeks.insert(iso_week(merged_at));
+            }
+        }
+    }
+    u64::try_from(weeks.len()).unwrap_or(u64::MAX)
+}
+
 /// The ISO year and week of an instant's UTC date.
 fn iso_week(at: substance_core::Timestamp) -> (i32, u8) {
     let date: Date = at.as_offset_date_time().date();

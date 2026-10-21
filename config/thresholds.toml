@@ -4,9 +4,10 @@
 # false the report says "thresholds uncalibrated" and no reader should treat a failure
 # here as a verdict about a person or a project.
 #
-# M1-T06 extends this file with the archetype cut-offs, the H12/H20 thresholds and the
-# remaining history keys. M1-T05 reads only the six values below: a check whose key is
-# absent has no threshold and reports its metrics without a pass or a fail (ADR-0013).
+# A check whose key is absent has no threshold and reports its metrics without passing or
+# failing (ADR-0013). A misspelt key is an error, not a silently removed threshold.
+#
+# The values are the action plan's provisional starting points.
 
 version = 1
 calibrated = false
@@ -34,3 +35,34 @@ short_lived_permille = 250
 # H10: the share of commits whose whole subject is a generic message. At or above this,
 # the check fails.
 generic_message_permille = 500
+
+# H12: below this share of merged pull requests reviewed by someone other than their
+# author, the check fails — but only once there are at least this many maintainers.
+# A solo project cannot review its own work, and that is H11's business, not H12's.
+reviewed_prs_permille = 200
+reviewed_prs_min_maintainers = 2
+
+# H16: a README that claims "production-ready" while the project has fewer active weeks
+# than this is a claim over an empty history.
+claims_min_active_weeks = 4
+
+# H20: median authored lines per person-day, counted over every (author, UTC date) pair.
+# At or above this, the check fails, once there are enough active days to read a median.
+person_day_median_lines = 2000
+person_day_min_active_days = 14
+
+# The archetype cut-offs H22 applies, in the plan's order: one-shot dump, burst then
+# abandoned, team maintained, solo maintained, young and iterating. A rule with a missing
+# number cannot match, and H22 names the number it needed.
+[history.archetypes]
+one_shot_big_bang_permille = 700
+one_shot_max_active_weeks = 3
+burst_min_age_days = 120
+young_max_age_days = 90
+young_min_active_days = 15
+young_min_edit_share_permille = 400
+young_min_test_lines_change_permille = 300
+solo_min_active_weeks = 2
+solo_max_response_hours = 168
+team_min_maintainers = 2
+team_min_reviewed_permille = 500

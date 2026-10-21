@@ -9,6 +9,7 @@ pub mod intake;
 pub mod manifest;
 pub mod run;
 pub mod stage;
+pub mod thresholds;
 pub mod tools;
 pub mod verdicts;
 
@@ -19,5 +20,6 @@ pub use manifest::{
 };
 pub use run::{GateHit, RunError, RunOptions, RunOutcome, run};
 pub use stage::Stage;
+pub use thresholds::THRESHOLDS_TOML;
 pub use tools::{TOOLS_TOML, ToolProbe, manifest_tools, probe_versions, tool_reason};
 pub use verdicts::{SkipReason, judging_checks, pending, skip_reason};

@@ -35,5 +35,5 @@ pub use model::{
 pub use parts::{CheckPart, parts_of};
 pub use registry::{CheckMeta, REGISTRY, meta};
 pub use schema_export::{SchemaFile, SchemaKind, TYPESCRIPT_DIR, TypeScriptFile};
-pub use thresholds::{HistoryThresholds, Thresholds, ThresholdsError};
+pub use thresholds::{ArchetypeThresholds, HistoryThresholds, Thresholds, ThresholdsError};
 pub use tools::{MISSING_VERSION, PIN_TBD, ToolSpec, ToolsError, ToolsFile, Version, meets_floor};
