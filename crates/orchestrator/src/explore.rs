@@ -26,6 +26,7 @@ use std::time::Duration;
 
 use substance_adapters::accounts::password_for;
 use substance_adapters::boot::BootEnv;
+use substance_adapters::boot::FreshCopy;
 use substance_adapters::ladder;
 use substance_adapters::stack::RepoView;
 use substance_core::config::ProjectConfig;
@@ -58,8 +59,10 @@ const ENTRY: &str = "/";
 pub struct ExploreInput<'a> {
     /// The config: login, budgets and the users.
     pub config: &'a ProjectConfig,
-    /// The work copy the app runs in.
+    /// The work copy the app runs in: `runs/<run_id>/work/`, never the user's checkout (§4.1).
     pub work: &'a Path,
+    /// How to export the commit again, for the README rung's own copy.
+    pub fresh_copy: Option<&'a FreshCopy<'a>>,
     /// The run directory: logs, records, blobs and the outputs.
     pub run_dir: &'a Path,
     /// The run's id, which every crawl record carries.
@@ -134,7 +137,7 @@ pub async fn run(input: &ExploreInput<'_>) -> Result<ExploreOutcome, String> {
         home: &home,
         logs: &logs,
         limits: Limits::detect(),
-        fresh_copy: None,
+        fresh_copy: input.fresh_copy,
         defer_seed: true,
         env: input.env,
     };

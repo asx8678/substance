@@ -48,6 +48,13 @@ check "StoppedApp token construction outside crates/runner/src/process.rs (M2-T0
 check "StoppedApp::nothing_started outside its definition and the replay reset site (M3-T07)" \
   rg -n --glob '*.rs' 'StoppedApp::nothing_started' crates \
     -g '!**/runner/src/process.rs' -g '!**/orchestrator/src/replay.rs'
+# §4.1: "substance never runs code in the user's checkout. It exports the commit under test to
+# runs/<run_id>/work/ and runs everything there." The runtime and explore stages install, build,
+# start, migrate and seed the repository, so they are handed the exported copy. Passing
+# `checkout.root` -- the user's own checkout -- compiles, works, and quietly breaks the promise,
+# so it is a guard: nothing in orchestrator may name the checkout as a stage's `work`.
+check "a stage runs repo code in the user's checkout instead of the work copy (§4.1)" \
+  rg -n --glob '*.rs' 'work: checkout' crates/orchestrator/src
 # M1-T07: the rule pack is embedded with include_str!, which needs a literal path, so a rule
 # file added to rules/ but not to FILES would be silently ignored — a rule nobody runs. The
 # guard is what makes "embedded" a property of the tree rather than of one list.

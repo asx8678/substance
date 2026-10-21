@@ -114,6 +114,9 @@ pub enum RunError {
     /// than a mistake in the command line.
     #[error("{0}")]
     Replay(String),
+    /// The commit under test could not be exported to the run directory: an internal error, exit 3.
+    #[error(transparent)]
+    WorkCopy(#[from] substance_runner::WorkCopyError),
     /// The file system refused an operation: an internal error, exit 3.
     #[error("cannot prepare {path}: {source}")]
     Io {
@@ -291,6 +294,38 @@ async fn run_stages(
         run_dir.write_json(&name, finding)?;
     }
 
+    // §4.1: substance never runs code in the user's checkout. The runtime and explore stages
+    // execute the repository -- install, build, start, migrate, seed -- so both are handed a copy
+    // of the commit exported to `runs/<run_id>/work/`, never `checkout.root`. The export is made
+    // once, here, because both stages boot the same tree. It stays under the run directory after
+    // the run (which is deleted wholesale with `runs/<run_id>/`, or kept for a reader to inspect),
+    // so nothing outside the run directory is touched. Without `--allow-exec` no repo code runs at
+    // all, and the copy is not made.
+    let work_copy = if checkout.permit.is_some() {
+        Some(
+            substance_runner::WorkCopy::create(
+                checkout.root.as_path(),
+                &manifest.repo.commit_sha,
+                run_dir.as_path(),
+                &manifest.run_id,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    let work = work_copy
+        .as_ref()
+        .map_or_else(|| checkout.root.as_path(), substance_runner::WorkCopy::root);
+    // The README rung of the boot ladder is the one step allowed its own export (`work-readme/`),
+    // so a failed install from a document cannot dirty the tree the other rungs use. Its source is
+    // the repository, never the exported copy: `git archive` needs the commit.
+    let fresh_copy = substance_adapters::boot::FreshCopy {
+        source: checkout.root.as_path(),
+        commit_sha: &manifest.repo.commit_sha,
+        run_dir: run_dir.as_path(),
+    };
+
     // The runtime stage: database, app, seed, accounts, `seeded` snapshot. It runs after triage
     // because triage needs no app and its checks are the ones that can still judge a repository
     // whose boot fails. Every missing prerequisite is a note, so a run without `--allow-exec` or
@@ -302,7 +337,8 @@ async fn run_stages(
         .collect();
     let runtime = crate::runtime::run(&crate::runtime::RuntimeInput {
         config: &config,
-        work: checkout.root.as_path(),
+        work,
+        fresh_copy: Some(&fresh_copy),
         run_dir: run_dir.as_path(),
         run_id: &manifest.run_id,
         master_seed,
@@ -353,7 +389,8 @@ async fn run_stages(
                 .collect();
         match crate::explore::run(&crate::explore::ExploreInput {
             config: &config,
-            work: checkout.root.as_path(),
+            work,
+            fresh_copy: Some(&fresh_copy),
             run_dir: run_dir.as_path(),
             run_id: &manifest.run_id,
             master_seed,

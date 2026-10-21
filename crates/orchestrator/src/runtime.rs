@@ -45,6 +45,7 @@ use substance_adapters::accounts::{
     AccountError, AccountPlan, SignupRequest, password_for, render,
 };
 use substance_adapters::boot::BootEnv;
+use substance_adapters::boot::FreshCopy;
 use substance_adapters::boot::StepFact;
 use substance_adapters::db::cleanup::DatabaseCleanup;
 use substance_adapters::db::factory::{self, Adapter, FactoryError};
@@ -106,8 +107,13 @@ const HELPER_CAP_S: u64 = 30;
 pub struct RuntimeInput<'a> {
     /// The config, for commands, accounts and the database.
     pub config: &'a ProjectConfig,
-    /// The work copy the app runs in.
+    /// The work copy the app runs in: `runs/<run_id>/work/`, never the user's checkout (§4.1).
     pub work: &'a Path,
+    /// How to export the commit again, for a rung that must not touch `work`.
+    ///
+    /// The README rung runs arbitrary shell from a document and gets `work-readme/`; `None` means
+    /// the caller has no source repository, and that rung then runs in `work` and says so.
+    pub fresh_copy: Option<&'a FreshCopy<'a>>,
     /// The run directory: home, logs, snapshots, `canaries.json`.
     pub run_dir: &'a Path,
     /// The run's id, which names its databases.
@@ -607,7 +613,7 @@ async fn boot(
         home: &home,
         logs: &logs,
         limits: Limits::detect(),
-        fresh_copy: None,
+        fresh_copy: input.fresh_copy,
         // Seeded below, once the app is up: this stage owns the seed step, and the plan's own record
         // of the command is what it uses to find it.
         defer_seed: true,
