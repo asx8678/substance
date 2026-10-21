@@ -22,7 +22,9 @@ use std::path::{Path, PathBuf};
 
 use substance_core::hash::canonical_json_pretty_value;
 use substance_core::ids::{RecordId, RunId};
-use substance_core::model::{DbDelta, EffectRecord, Logs, Measured, RecordPart, RowCounts, Timing};
+use substance_core::model::{
+    DbDelta, EffectRecord, EgressEntry, EmailEntry, Logs, Measured, RecordPart, RowCounts, Timing,
+};
 use substance_runner::BlobStore;
 
 use crate::logs::{LogChannel, LogMark, LogRules};
@@ -117,6 +119,14 @@ pub struct Observed {
     pub queries: Option<u32>,
     /// The reason the query channel was unavailable.
     pub queries_reason: Option<String>,
+    /// Third-party requests the proxy saw in the window, when the proxy was running.
+    pub egress: Option<Vec<EgressEntry>>,
+    /// Why the egress channel was unavailable, when it was.
+    pub egress_reason: Option<String>,
+    /// Emails the mailbox caught in the window, when Mailpit was running.
+    pub email: Option<Vec<EmailEntry>>,
+    /// Why the email channel was unavailable, when it was.
+    pub email_reason: Option<String>,
     /// How long the action took to settle.
     pub timing: Timing,
 }
@@ -136,6 +146,10 @@ impl Observed {
             rows_reason: None,
             queries: None,
             queries_reason: None,
+            egress: None,
+            egress_reason: None,
+            email: None,
+            email_reason: None,
             timing: Timing {
                 settle_ms: 0,
                 timed_out: false,
@@ -376,12 +390,55 @@ impl RecordStore {
             db,
             logs,
             queries,
-            // M3-T04 fills these; saying so is the difference between "no third-party call" and
-            // "nothing was watching for one".
-            egress: Measured::not_measured("the egress proxy arrives in M3-T04"),
-            email: Measured::not_measured("Mailpit arrives in M3-T04"),
+            // A proxy or mailbox that was not running is `not_measured`, never an empty list: that
+            // is the difference between "no third-party call" and "nothing was watching" (ADR-0014).
+            egress: channel(
+                observed.egress.as_ref(),
+                observed.egress_reason.as_deref(),
+                "the egress proxy was not running for this action",
+            ),
+            email: channel(
+                observed.email.as_ref(),
+                observed.email_reason.as_deref(),
+                "no mailbox was running for this action",
+            ),
             timing: observed.timing.clone(),
         })
+    }
+}
+
+/// The egress entries for a window, from what the proxy observed.
+///
+/// Only the fields a check reads are carried: the proxy's own index orders the entries here and
+/// does not travel with them, because two runs of the same action must produce the same bytes.
+#[must_use]
+pub fn egress_entries(observed: &[substance_runner::egress::Observed]) -> Vec<EgressEntry> {
+    observed
+        .iter()
+        .map(|entry| EgressEntry {
+            host: entry.host.clone(),
+            method: entry.method.clone(),
+            path: entry.path.clone(),
+            status: entry.status,
+            denied: entry.denied,
+            bytes: u32::try_from(entry.request_bytes).unwrap_or(u32::MAX),
+            body: entry.request_body.clone(),
+        })
+        .collect()
+}
+
+/// One of the channels that arrives as a list, filled from what was observed.
+///
+/// A channel with a reason is `not_measured` with that reason, whatever else it has: a partial list
+/// says less than the reason does, and a record must not claim a complete answer it does not have.
+fn channel<T>(observed: Option<&Vec<T>>, reason: Option<&str>, fallback: &str) -> Measured<Vec<T>>
+where
+    T: Clone,
+{
+    match (observed, reason) {
+        (_, Some(reason)) => Measured::not_measured(reason.to_owned()),
+        (Some(entries), None) => Measured::observed(entries.clone()),
+        (None, None) => Measured::not_measured(fallback.to_owned()),
     }
 }
 

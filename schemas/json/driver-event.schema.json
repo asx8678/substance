@@ -131,7 +131,7 @@
     },
     "EgressEntry": {
       "additionalProperties": false,
-      "description": "One third-party request the egress proxy saw.",
+      "description": "One third-party request the egress proxy saw.\n\nThe path and the status are here as well as the host because the checks need them: a canary\nsmuggled in a query string is only visible in the path (B13), and a request that reached a paid\nprovider and got a 401 is a different finding from one that never left (B26).",
       "properties": {
         "body": {
           "anyOf": [
@@ -150,6 +150,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "denied": {
+          "description": "Whether the run's allow list refused it.",
+          "type": "boolean"
+        },
         "host": {
           "description": "The host contacted.",
           "type": "string"
@@ -157,11 +161,25 @@
         "method": {
           "description": "The method.",
           "type": "string"
+        },
+        "path": {
+          "description": "The path and query, as the proxy saw them.",
+          "type": "string"
+        },
+        "status": {
+          "description": "The status the client received, or 0 when there was no response at all.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "host",
         "method",
+        "path",
+        "status",
+        "denied",
         "bytes"
       ],
       "type": "object"

@@ -32,6 +32,16 @@ checks = ["S11", "L05"]
 exec_repo_code = false
 network = false
 
+[tools.mailpit]
+bin = "mailpit"
+version_args = ["version"]
+min_version = "1.31.0"   # the /api/v1/messages and /api/v1/message/{ID} shape this client reads
+pin = "1.31.6"            # axllent/mailpit refs/tags/v1.31.6 (git ls-remote, 2026-10-21)
+checks = ["B27"]
+# It accepts the app's mail and serves its own API; no repository config is loaded.
+exec_repo_code = false
+network = false
+
 [tools.sqldiff]
 bin = "sqldiff"
 version_args = ["--version"]

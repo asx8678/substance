@@ -80,6 +80,7 @@ impl ProjectConfig {
         self.signals.validate(&mut problems);
         self.budgets.validate(&mut problems);
         self.egress.validate(&mut problems);
+        self.mail.validate(&mut problems);
         problems.sort();
         problems
     }
@@ -435,12 +436,52 @@ impl LoginConfig {
 }
 
 /// The app's mail environment. Mailpit supplies the values (M3-T04).
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, TS)]
+///
+/// `Default` is written out rather than derived, because the container's `serde(default)` takes
+/// missing fields from it: a derived default would make `poll_ms` zero for any project that omits
+/// the section, and a zero wait reports "no mail" before the app has had a chance to send one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case", deny_unknown_fields, default)]
 pub struct MailConfig {
     /// The environment the app gets, sorted by name, with `{smtp_host}` and `{smtp_port}`
     /// filled in by the runner.
     pub env: BTreeMap<String, String>,
+    /// How long B27 waits for a message after triggering a flow, in milliseconds.
+    ///
+    /// The plan says ten seconds. Configurable because a mailer in a slow run can take longer, and
+    /// a fixed wait would turn "the mail was late" into "no mail was sent". Omitted means the
+    /// default, not zero: a zero wait would report every flow as "no mail" the instant it started.
+    #[serde(default = "default_mail_poll_ms")]
+    pub poll_ms: u32,
+}
+
+/// The default for [`MailConfig::poll_ms`], which is also what the documentation calls for.
+fn default_mail_poll_ms() -> u32 {
+    MailConfig::DEFAULT_POLL_MS
+}
+
+impl Default for MailConfig {
+    fn default() -> Self {
+        Self {
+            env: BTreeMap::new(),
+            poll_ms: Self::DEFAULT_POLL_MS,
+        }
+    }
+}
+
+impl MailConfig {
+    /// How long a flow waits for its message unless the project says otherwise.
+    pub const DEFAULT_POLL_MS: u32 = 10_000;
+
+    /// Checks that the wait is a wait: zero would make every flow report "no mail" instantly.
+    fn validate(&self, problems: &mut Vec<String>) {
+        if self.poll_ms == 0 {
+            problems.push(format!(
+                "mail: poll_ms is 0; omit it for {}",
+                Self::DEFAULT_POLL_MS
+            ));
+        }
+    }
 }
 
 /// Extra selectors that stand in for agent labels (M12).

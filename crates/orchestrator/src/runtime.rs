@@ -36,7 +36,7 @@
 //! this through a proxy would make creating an account depend on the proxy being up. Every other
 //! outbound request in the plan goes through the proxy in M3.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -98,6 +98,10 @@ const README_CAP_S: u64 = 900;
 /// than this is not slow, it is stuck.
 const SIGNUP_CAP: Duration = Duration::from_secs(30);
 
+/// How long Mailpit is given to start. It is a single binary that binds two ports, so a wait
+/// longer than seconds means it did not start at all.
+const HELPER_CAP_S: u64 = 30;
+
 /// What the runtime stage needs from the run it is part of.
 pub struct RuntimeInput<'a> {
     /// The config, for commands, accounts and the database.
@@ -116,6 +120,8 @@ pub struct RuntimeInput<'a> {
     pub permit: Option<&'a ExecPermit>,
     /// The run's interrupt registrar, so a Ctrl-C reaches the app and the database.
     pub registrar: &'a Registrar,
+    /// Where egress bodies and email bodies go.
+    pub blobs: substance_runner::BlobStore,
 }
 
 /// What the runtime stage produced.
@@ -156,6 +162,18 @@ pub struct RuntimeOutcome {
     /// `None` when no migrate command ran successfully the first time: there is then nothing to
     /// re-run, and the check says so rather than passing.
     pub second_migrate: Option<MigrateRun>,
+    /// What the egress proxy saw, for the recorder's egress channel.
+    ///
+    /// `None` when the proxy never started, which is `not_measured` on every record rather than an
+    /// empty list: "no third-party call" and "nothing was watching" are different claims.
+    pub egress: Option<substance_runner::egress::EgressLog>,
+    /// The mailbox's API port, for the recorder's email channel.
+    ///
+    /// `None` when Mailpit is not on PATH. The port rather than the client, because the messages
+    /// have to be read per action window, after the app has sent them.
+    pub mail_http_port: Option<u16>,
+    /// The SMTP port the app was told to send to, recorded so a reader can see it was wired up.
+    pub mail_smtp_port: Option<u16>,
 }
 
 /// One re-run of the migrate command.
@@ -220,14 +238,27 @@ pub async fn run(input: &RuntimeInput<'_>) -> Result<RuntimeOutcome, String> {
     };
 
     let database = provision(input, &mut outcome).await;
-    let env = match database.as_ref() {
+    let mut env = match database.as_ref() {
         Some((adapter, handle)) => app_env(adapter, handle),
         None => BTreeMap::new(),
     };
 
+    // The outside world is closed *before* the app starts, because the app reads its proxy
+    // variables at boot: a client that captures them once would otherwise keep talking to the
+    // network for the whole run, unseen.
+    let egress = start_egress(input, &env, &mut outcome).await;
+    if let Some(egress) = &egress {
+        let bypass: Vec<String> = db_hosts(&env).into_iter().collect();
+        for (key, value) in egress.env(&bypass) {
+            env.insert(key, value);
+        }
+    }
+    let mail = start_mailpit(input, input.config, &mut env, &mut outcome).await;
+
     // Booted even without a database: a repository whose checks need none still gets its rung, its
     // friction and its boot outcome recorded.
     let Some(mut booted) = boot(input, permit, &env, &mut outcome).await else {
+        stop_helpers(egress, mail, &mut outcome).await;
         return Ok(outcome);
     };
 
@@ -239,6 +270,7 @@ pub async fn run(input: &RuntimeInput<'_>) -> Result<RuntimeOutcome, String> {
         // No database: no seed, no accounts, no snapshot. The app still stops here, because a
         // process this stage started and did not stop would outlive the run.
         let _ = stop(input, &mut booted, &mut outcome).await;
+        stop_helpers(egress, mail, &mut outcome).await;
         return Ok(outcome);
     };
 
@@ -276,6 +308,7 @@ pub async fn run(input: &RuntimeInput<'_>) -> Result<RuntimeOutcome, String> {
             "runtime: no seeded snapshot, because the app could not be stopped cleanly".to_owned(),
         ),
     }
+    stop_helpers(egress, mail, &mut outcome).await;
     outcome.notes.sort();
     outcome.notes.dedup();
     Ok(outcome)
@@ -379,6 +412,131 @@ async fn provision(
     }
 }
 
+/// Starts the egress proxy, or records why it could not start.
+///
+/// A proxy that cannot start is a note, not a failed run: the checks that need the egress channel
+/// then report `not_measured` with this reason, which is worse evidence but not a broken run.
+async fn start_egress(
+    input: &RuntimeInput<'_>,
+    env: &BTreeMap<String, String>,
+    outcome: &mut RuntimeOutcome,
+) -> Option<substance_runner::egress::Egress> {
+    let allow = &input.config.egress.allow;
+    match substance_runner::egress::Egress::start(input.run_dir, allow, input.blobs.clone()).await {
+        Ok(egress) => {
+            outcome.notes.push(format!(
+                "runtime: the egress proxy listens on {} and allows {} host(s)",
+                egress.address(),
+                allow.len()
+            ));
+            outcome.egress = Some(egress.log().clone());
+            Some(egress)
+        }
+        Err(error) => {
+            outcome.notes.push(format!(
+                "runtime: the egress proxy was not started: {error}"
+            ));
+            let _ = env;
+            None
+        }
+    }
+}
+
+/// The hosts a proxied client must reach directly: the database, and the app's own loopback.
+///
+/// `NO_PROXY` entries, not allow-list entries: these are reached without the proxy, so they are
+/// invisible to the egress channel. The database is here because a proxied SQL connection would be
+/// a protocol the proxy cannot speak, and loopback because the app talking to itself is not egress.
+fn db_hosts(env: &BTreeMap<String, String>) -> BTreeSet<String> {
+    let mut hosts = BTreeSet::new();
+    for name in ["DATABASE_URL", "PGHOST", "DATABASE_HOST"] {
+        let Some(value) = env.get(name) else {
+            continue;
+        };
+        // A URL carries its host between `@` and the next `:` or `/`; a bare host is itself.
+        let after_scheme = value
+            .split_once("://")
+            .map_or(value.as_str(), |(_, rest)| rest);
+        let authority = after_scheme.split('/').next().unwrap_or(after_scheme);
+        let host_part = authority.rsplit('@').next().unwrap_or(authority);
+        let host = host_part.split(':').next().unwrap_or(host_part);
+        if !host.is_empty() && !host.contains('[') {
+            hosts.insert(host.to_owned());
+        }
+    }
+    hosts
+}
+
+/// Starts Mailpit and applies `[mail] env` to the app, or records why the channel is unavailable.
+async fn start_mailpit(
+    input: &RuntimeInput<'_>,
+    config: &ProjectConfig,
+    env: &mut BTreeMap<String, String>,
+    outcome: &mut RuntimeOutcome,
+) -> Option<substance_runner::mail::Mailpit> {
+    if config.mail.env.is_empty() {
+        outcome.notes.push(
+            "runtime: [mail] env is empty, so the app was not told where to send mail".to_owned(),
+        );
+        return None;
+    }
+    let logs = input.run_dir.join("logs");
+    match substance_runner::mail::Mailpit::start(
+        input.run_dir,
+        &logs,
+        substance_runner::Budget::after("mailpit", Duration::from_secs(HELPER_CAP_S)),
+    )
+    .await
+    {
+        Ok(mailpit) => {
+            let smtp_host = "127.0.0.1";
+            for (key, value) in substance_runner::mail::environment(
+                &config.mail.env,
+                smtp_host,
+                mailpit.smtp_port(),
+            ) {
+                env.insert(key, value);
+            }
+            outcome.mail_http_port = Some(mailpit.http_port());
+            outcome.mail_smtp_port = Some(mailpit.smtp_port());
+            outcome.notes.push(format!(
+                "runtime: Mailpit catches mail on port {} and serves its API on {}",
+                mailpit.smtp_port(),
+                mailpit.http_port()
+            ));
+            Some(mailpit)
+        }
+        Err(error) => {
+            outcome.notes.push(format!(
+                "runtime: the email channel is not measured: {error}"
+            ));
+            None
+        }
+    }
+}
+
+/// Stops the helpers this stage started.
+///
+/// In one place rather than at each exit: the proxy and the mailbox hold ports and child processes,
+/// and a stage that returned early without stopping them would leave both for the run's teardown to
+/// find by pid.
+async fn stop_helpers(
+    egress: Option<substance_runner::egress::Egress>,
+    mail: Option<substance_runner::mail::Mailpit>,
+    outcome: &mut RuntimeOutcome,
+) {
+    if let Some(mut egress) = egress {
+        egress.stop().await;
+    }
+    if let Some(mut mail) = mail
+        && let Err(error) = mail.stop(Duration::from_secs(5)).await
+    {
+        outcome
+            .notes
+            .push(format!("runtime: Mailpit did not stop cleanly: {error}"));
+    }
+}
+
 /// Boots the app, returning the running handle.
 async fn boot(
     input: &RuntimeInput<'_>,
@@ -386,6 +544,7 @@ async fn boot(
     env: &BTreeMap<String, String>,
     outcome: &mut RuntimeOutcome,
 ) -> Option<BootedApp> {
+    // `env` already carries the proxy and SMTP variables; the boot's own spec applies the map below.
     let repo = RepoView::new(input.work);
     let home = input.run_dir.join(substance_runner::HOME_DIR);
     let logs = input.run_dir.join("logs");

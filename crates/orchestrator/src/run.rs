@@ -298,6 +298,7 @@ async fn run_stages(
         tools: &runtime_tools,
         permit: checkout.permit.as_ref(),
         registrar,
+        blobs: substance_runner::BlobStore::new(run_dir.as_path()),
     })
     .await;
     let mut runtime_notes = Vec::new();

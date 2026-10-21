@@ -40,8 +40,9 @@ ui = { path = "/login", identifier = "input[name=email]", password = "input[type
 [signup]
 api = { method = "POST", path = "/api/users", body = '{"user":{"email":"{email}","password":"{password}","username":"{handle}"}}' }
 
-[mail]
+[mail]                        # M3-T04; Mailpit catches what the app sends
 env = { SMTP_HOST = "{smtp_host}", SMTP_PORT = "{smtp_port}" }
+# poll_ms = 10000             # how long a mail flow waits for its message (B27)
 
 [signals]                     # extra success/error selectors (stand-in for agent labels)
 success = []

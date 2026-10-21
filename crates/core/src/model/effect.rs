@@ -179,6 +179,10 @@ pub struct Logs {
 }
 
 /// One third-party request the egress proxy saw.
+///
+/// The path and the status are here as well as the host because the checks need them: a canary
+/// smuggled in a query string is only visible in the path (B13), and a request that reached a paid
+/// provider and got a 401 is a different finding from one that never left (B26).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct EgressEntry {
@@ -186,6 +190,12 @@ pub struct EgressEntry {
     pub host: String,
     /// The method.
     pub method: String,
+    /// The path and query, as the proxy saw them.
+    pub path: String,
+    /// The status the client received, or 0 when there was no response at all.
+    pub status: u16,
+    /// Whether the run's allow list refused it.
+    pub denied: bool,
     /// The request size in bytes.
     pub bytes: u32,
     /// The request body, as a blob.

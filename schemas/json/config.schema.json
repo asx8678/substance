@@ -903,7 +903,7 @@
     },
     "MailConfig": {
       "additionalProperties": false,
-      "description": "The app's mail environment. Mailpit supplies the values (M3-T04).",
+      "description": "The app's mail environment. Mailpit supplies the values (M3-T04).\n\n`Default` is written out rather than derived, because the container's `serde(default)` takes\nmissing fields from it: a derived default would make `poll_ms` zero for any project that omits\nthe section, and a zero wait reports \"no mail\" before the app has had a chance to send one.",
       "properties": {
         "env": {
           "additionalProperties": {
@@ -912,6 +912,13 @@
           "default": {},
           "description": "The environment the app gets, sorted by name, with `{smtp_host}` and `{smtp_port}`\nfilled in by the runner.",
           "type": "object"
+        },
+        "poll_ms": {
+          "default": 10000,
+          "description": "How long B27 waits for a message after triggering a flow, in milliseconds.\n\nThe plan says ten seconds. Configurable because a mailer in a slow run can take longer, and\na fixed wait would turn \"the mail was late\" into \"no mail was sent\". Omitted means the\ndefault, not zero: a zero wait would report every flow as \"no mail\" the instant it started.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "type": "object"
@@ -1126,7 +1133,8 @@
     "mail": {
       "$ref": "#/$defs/MailConfig",
       "default": {
-        "env": {}
+        "env": {},
+        "poll_ms": 10000
       },
       "description": "The environment the app gets for sending mail."
     },

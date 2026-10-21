@@ -3,9 +3,11 @@
 
 pub mod blobs;
 pub mod budget;
+pub mod egress;
 pub mod interrupt;
 pub mod limits;
 pub mod logs;
+pub mod mail;
 pub mod oneshot;
 pub mod permit;
 pub mod port;

@@ -3,6 +3,10 @@ import type { BlobRef } from "./BlobRef.js";
 
 /**
  * One third-party request the egress proxy saw.
+ *
+ * The path and the status are here as well as the host because the checks need them: a canary
+ * smuggled in a query string is only visible in the path (B13), and a request that reached a paid
+ * provider and got a 401 is a different finding from one that never left (B26).
  */
 export type EgressEntry = { 
 /**
@@ -13,6 +17,18 @@ host: string,
  * The method.
  */
 method: string, 
+/**
+ * The path and query, as the proxy saw them.
+ */
+path: string, 
+/**
+ * The status the client received, or 0 when there was no response at all.
+ */
+status: number, 
+/**
+ * Whether the run's allow list refused it.
+ */
+denied: boolean, 
 /**
  * The request size in bytes.
  */

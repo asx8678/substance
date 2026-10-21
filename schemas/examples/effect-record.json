@@ -77,6 +77,9 @@
       {
         "host": "api.openai.com",
         "method": "POST",
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "denied": false,
         "bytes": 812,
         "body": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
