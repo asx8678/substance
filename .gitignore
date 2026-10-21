@@ -3,3 +3,12 @@
 
 # macOS
 .DS_Store
+
+# Build output and run artifacts (rule 9: never commit build output)
+/target
+/runs
+/bench-runs
+
+# TypeScript driver
+/driver/node_modules
+/driver/dist

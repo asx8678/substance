@@ -2202,7 +2202,7 @@ These are the plan's acceptance criteria, as commands the owner runs after a mil
 
 Tick each task in the same commit that completes it.
 
-- [ ] M0-T01 Workspace scaffold
+- [x] M0-T01 Workspace scaffold
 - [ ] M0-T02 ADRs
 - [ ] M0-T03 Core IDs and registry
 - [ ] M0-T04 Core data model

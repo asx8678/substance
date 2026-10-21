@@ -1,0 +1,15 @@
+[package]
+name = "substance-agent"
+edition.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+agent = []
+
+[dependencies]
+thiserror = "2.0.21"
+tracing = "0.1.44"
+
+[lints]
+workspace = true
