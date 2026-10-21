@@ -321,7 +321,7 @@ exit $fail
   - `crates/core/src/ids.rs`:
     - newtypes `RunId`, `RecordId`, `FindingId` and `SnapshotId` over `String`, each with `derive(parts: &[&[u8]]) -> Self` as in §4.3;
     - `BlobRef`, holding `sha256:<hex>`.
-  - `crates/core/src/hash.rs`: sha256 and base32 helpers, and `canonical_json<T: Serialize>(&T) -> Vec<u8>`. It serializes to `serde_json::Value`, then writes it with its own recursive writer that sorts every object's keys by their UTF-8 bytes. It must not rely on serde_json's map order: any dependency can turn on `preserve_order` through feature unification.
+  - `crates/core/src/hash.rs`: sha256 and base32 helpers, and `canonical_json<T: Serialize>(&T) -> Result<Vec<u8>, CanonicalJsonError>` (fallible, so a serialization error can never hash as a placeholder; `canonical_json_value(&Value) -> Vec<u8>` is infallible). It serializes to `serde_json::Value`, then writes it with its own recursive writer that sorts every object's keys by their UTF-8 bytes. It must not rely on serde_json's map order: any dependency can turn on `preserve_order` through feature unification.
   - `crates/core/src/clock.rs`: the only wall-clock access in the workspace, `pub fn wall_now_utc() -> Timestamp`. `Timestamp` is a newtype over the `time` crate's `OffsetDateTime`, serialized as RFC 3339 UTC with whole seconds.
   - `crates/core/src/check.rs`:
     - `enum CheckId` with every ID, serialized as its string (`"B01"`): B01–B33, I01–I04, D01–D04, O01–O11, L01–L05, S01–S12, T01–T06, P01–P07, H01–H22, V01–V03, A01–A05, G01–G02. That's 114 IDs. Also `const COUNT: usize = 114`.
@@ -450,7 +450,7 @@ In v1 the level is recorded but doesn't gate anything, because only repo mode ex
     - `coverage { checks_total, checks_measured, routes, controls, server_code }`, where the last three are `Option<Ratio>` in permille;
     - `archetype: Option<Archetype>`, `provenance: Option<Provenance>`, `notes: Vec<String>`.
   - `protocol.rs`: the driver protocol from the plan's command table. `DriverCommand` is tagged `cmd`, `DriverEvent` is tagged `event`, and `RecordPart` holds the browser channels of one action.
-  - `normalize.rs`: `pub fn normalized_bytes(r: &EffectRecord) -> Vec<u8>`, which is canonical JSON without `id` and `timing.settle_ms`.
+  - `normalize.rs`: `pub fn normalized_bytes(r: &EffectRecord) -> Result<Vec<u8>, CanonicalJsonError>`, which is canonical JSON without `id` and `timing.settle_ms`.
   - `schemas/examples/effect-record.json`: the plan's sample, rewritten to the new shape. It is documentation, and M0-T07 validates it.
 - **Outcome:** all model types compile, carry schema and TS derives, and contain no floats.
 - **Checks:** C-RUST. `rg -n 'f32|f64' crates/core/src` prints nothing.
