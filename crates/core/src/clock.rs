@@ -72,3 +72,22 @@ impl<'de> Deserialize<'de> for Timestamp {
 pub fn wall_now_utc() -> Timestamp {
     Timestamp::new(OffsetDateTime::now_utc())
 }
+
+/// The start of a "last `days` days" window that ends at `as_of`.
+///
+/// Every relative date in the report is computed this way, from the manifest's `as_of`
+/// rather than from the wall clock, so two runs of one instant measure one window. A
+/// window longer than the calendar can represent starts at the earliest timestamp instead
+/// of failing: the checks that use a long window treat the whole history as in scope, and
+/// an out-of-range subtraction is a calendar limit, not a finding.
+#[must_use]
+pub fn window_start(as_of: Timestamp, days: u32) -> Timestamp {
+    let span = time::Duration::days(i64::from(days));
+    match as_of.as_offset_date_time().checked_sub(span) {
+        Some(instant) => Timestamp::new(instant),
+        None => Timestamp::new(time::OffsetDateTime::new_utc(
+            time::Date::MIN,
+            time::Time::MIDNIGHT,
+        )),
+    }
+}

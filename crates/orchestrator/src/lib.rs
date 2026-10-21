@@ -9,6 +9,7 @@ pub mod intake;
 pub mod manifest;
 pub mod run;
 pub mod stage;
+pub mod tools;
 pub mod verdicts;
 
 pub use config::{CONFIG_FILE_NAME, ConfigSource, LoadError, load_config, read_config};
@@ -18,4 +19,5 @@ pub use manifest::{
 };
 pub use run::{GateHit, RunError, RunOptions, RunOutcome, run};
 pub use stage::Stage;
+pub use tools::{TOOLS_TOML, ToolProbe, manifest_tools, probe_versions, tool_reason};
 pub use verdicts::{SkipReason, judging_checks, pending, skip_reason};

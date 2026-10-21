@@ -1,0 +1,147 @@
+# External tools substance drives (M1-T01). Data, not code.
+#
+# bin             the binary looked up on PATH
+# version_args    the arguments that print the version
+# min_version     the floor `substance doctor` enforces
+# pin             the exact version CI installs (M1-T12); "TBD" until a release is confirmed
+# checks          the checks this tool serves
+# exec_repo_code  true when running it executes repo-controlled code or loads its config,
+#                 so it needs --allow-exec
+# network         true when its output depends on online data, so --snapshot-from replays
+#                 the saved output instead of running it
+#
+# Pins were read from each project's release tags with
+#   git ls-remote --tags <repo> | sort -V | tail
+# except where a comment says otherwise. "TBD" means no release could be confirmed.
+
+[tools.git]
+bin = "git"
+version_args = ["--version"]
+min_version = "2.39.0"   # `git rev-parse --is-shallow-repository` (M0-T08 intake)
+pin = "2.56.0"           # git/git refs/tags/v2.56.0; intake records the host's git instead
+checks = []
+exec_repo_code = false
+network = false
+
+[tools.gitleaks]
+bin = "gitleaks"
+version_args = ["version"]
+min_version = "8.19.0"  # S11's `gitleaks git` / `gitleaks dir` JSON output
+pin = "8.30.1"           # gitleaks/gitleaks refs/tags/v8.30.1
+checks = ["S11", "L05"]
+exec_repo_code = false
+network = false
+
+[tools.osv-scanner]
+bin = "osv-scanner"
+version_args = ["--version"]
+min_version = "2.0.0"    # the v2 JSON report shape P01 parses
+pin = "2.7.0"            # google/osv-scanner refs/tags/v2.7.0
+checks = ["P01"]
+exec_repo_code = false
+network = true
+
+[tools.scorecard]
+bin = "scorecard"
+version_args = ["version"]
+min_version = "5.0.0"    # H21 imports the 0-10 scores by name
+pin = "5.6.0"            # ossf/scorecard refs/tags/v5.6.0
+checks = ["H21"]
+exec_repo_code = false
+network = true
+
+[tools.npm]
+bin = "npm"
+version_args = ["--version"]
+min_version = "10.0.0"   # `npm audit --json` v2 report
+pin = "11.21.1"          # npm/cli refs/tags/v11.21.1; CI's Node image may pin its own
+checks = ["P01", "P05"]
+exec_repo_code = false
+network = true
+
+[tools.cargo-audit]
+bin = "cargo-audit"
+version_args = ["--version"]
+min_version = "0.21.0"   # `cargo audit --json`
+pin = "0.22.2"           # rustsec/rustsec refs/tags/cargo-audit/v0.22.2
+checks = ["P01"]
+exec_repo_code = false
+network = true
+
+[tools.pip-audit]
+bin = "pip-audit"
+version_args = ["--version"]
+min_version = "2.7.0"    # `pip-audit --format json`
+pin = "2.10.1"           # pypa/pip-audit refs/tags/v2.10.1
+checks = ["P01"]
+# It can build packages, which runs repo-controlled code (P01's row).
+exec_repo_code = true
+network = true
+
+[tools.knip]
+bin = "knip"
+version_args = ["--version"]
+min_version = "5.0.0"    # `knip --reporter json`
+pin = "5.77.1"           # webpro-nl/knip refs/tags/knip@5.77.1
+checks = ["P05"]
+# It loads the repo's knip/eslint configuration.
+exec_repo_code = true
+network = false
+
+[tools.cargo-machete]
+bin = "cargo-machete"
+version_args = ["--version"]
+min_version = "0.7.0"    # `cargo machete --with-metadata`
+pin = "0.9.2"            # bnjbvr/cargo-machete refs/tags/v0.9.2
+checks = ["P05"]
+exec_repo_code = false
+network = false
+
+[tools.deptry]
+bin = "deptry"
+version_args = ["--version"]
+min_version = "0.20.0"   # `deptry --json-output`
+pin = "0.25.1"           # fpgmaas/deptry refs/tags/0.25.1
+checks = ["P05"]
+exec_repo_code = false
+network = false
+
+[tools.cargo-deny]
+bin = "cargo-deny"
+version_args = ["--version"]
+min_version = "0.19.0"   # `cargo deny --format json check licenses`
+pin = "0.19.9"           # EmbarkStudios/cargo-deny refs/tags/0.19.9
+checks = ["P06"]
+exec_repo_code = false
+network = true
+
+# S01's three slop scanners. The plan names them and links their package pages
+# (pypi.org/project/aislop, pypi.org/project/ai-slop-detector, docs.rs/antislop) but not
+# their version commands, so both the version argument and the pin stay unconfirmed
+# until M1-T08 sits down with their `--help` output.
+[tools.aislop]
+bin = "aislop"
+version_args = ["--version"]
+min_version = "0.0.0"
+pin = "TBD"
+checks = ["S01"]
+exec_repo_code = false
+network = false
+
+[tools.antislop]
+bin = "antislop"
+version_args = ["--version"]
+min_version = "0.0.0"
+pin = "TBD"
+checks = ["S01"]
+exec_repo_code = false
+network = false
+
+[tools.ai-slop-detector]
+bin = "ai-slop-detector"
+version_args = ["--version"]
+min_version = "0.0.0"
+pin = "TBD"
+checks = ["S01"]
+exec_repo_code = false
+network = false

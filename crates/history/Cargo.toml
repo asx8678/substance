@@ -4,7 +4,13 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+data-encoding = "2.11.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "http2"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+substance-core = { version = "0.0.0", path = "../core" }
 thiserror = "2.0.21"
+tokio = { version = "1.54.0", features = ["time"] }
 tracing = "0.1.44"
 
 [lints]

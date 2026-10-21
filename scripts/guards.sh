@@ -27,4 +27,9 @@ check "HashMap/HashSet: use BTreeMap/BTreeSet (ADR-0009)" \
   rg -n --glob '*.rs' '\bHash(Map|Set)\b' "${roots[@]}"
 check "process spawning outside crates/runner" \
   rg -n --glob '*.rs' --glob '!**/runner/src/**' 'Command::new' "${roots[@]}"
+# §4.1: only intake may grant the permission to run repo-controlled code, and only when
+# --allow-exec was given. Every other crate has to ask the caller for a &ExecPermit.
+check "ExecPermit grant outside crates/runner and orchestrator intake (M1-T01)" \
+  rg -n --glob '*.rs' --glob '!**/runner/src/**' --glob '!**/orchestrator/src/intake.rs' \
+    'ExecPermit::(new|grant|default)' "${roots[@]}"
 exit $fail

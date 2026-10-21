@@ -20,6 +20,7 @@ use crate::config::{ConfigSource, LoadError, load_config};
 use crate::intake::{IntakeError, intake};
 use crate::manifest::{ManifestInputs, build, default_master_seed};
 use crate::stage::Stage;
+use crate::tools::{manifest_tools, probe_versions, table};
 use crate::verdicts;
 
 /// The default directory a run is written to, under the caller's working directory.
@@ -83,6 +84,15 @@ pub enum RunError {
     /// The run directory could not be written: an internal error, exit 3.
     #[error(transparent)]
     RunDir(#[from] RunDirError),
+    /// The embedded `tools.toml` is malformed: an internal error, exit 3.
+    #[error("tools.toml: {0}")]
+    Tools(String),
+    /// A probed tool's output could not be saved: an internal error, exit 3.
+    #[error(transparent)]
+    Blob(#[from] substance_runner::BlobError),
+    /// A flag names something that cannot be used: a usage error, exit 2.
+    #[error("{0}")]
+    Usage(String),
     /// A document could not be serialized: an internal error, exit 3.
     #[error(transparent)]
     Serialize(#[from] CanonicalJsonError),
@@ -112,18 +122,32 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
         .clone()
         .unwrap_or_else(|| PathBuf::from(DEFAULT_RUNS_DIR));
     ensure_dir(&out_root)?;
-    let checkout = intake(&options.repo, options.rev.as_deref(), &out_root).await?;
+    if let Some(snapshot) = &options.snapshot_from {
+        ensure_run_dir(snapshot)?;
+    }
+    let checkout = intake(
+        &options.repo,
+        options.rev.as_deref(),
+        &out_root,
+        options.allow_exec,
+    )
+    .await?;
     let (config, source) = load_config(options.config.as_deref(), &checkout.root)?;
     let as_of = options.as_of.unwrap_or_else(wall_now_utc);
     let master_seed = options
         .seed
         .unwrap_or_else(|| default_master_seed(&checkout.commit_sha));
+    // The tool versions go into the manifest, so they are part of the run ID: two runs
+    // with different gitleaks versions are different runs.
+    let tools_file = table().map_err(|error| RunError::Tools(error.to_string()))?;
+    let probes = probe_versions(&tools_file, &checkout.root).await;
     let manifest = build(&ManifestInputs {
         checkout: &checkout,
         as_of,
         master_seed,
         config_hash: hash_config(&config)?,
         allow_exec: options.allow_exec,
+        tools: manifest_tools(&probes),
     })?;
     let run_dir = RunDir::create(&out_root, &manifest.run_id)?;
     run_dir.write_json("manifest.json", &manifest)?;
@@ -131,6 +155,7 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
         "invocation.json",
         &Invocation::of(options, run_dir.as_path(), source.kind()),
     )?;
+    write_tool_blobs(run_dir.as_path(), &probes)?;
     let report = report_for(&manifest, &config, options.allow_exec, &source);
     run_dir.write_json("report.json", &report)?;
     Ok(RunOutcome {
@@ -153,7 +178,11 @@ struct Invocation {
     /// Whether `--triage-only` was given.
     triage_only: bool,
     /// Whether `--snapshot-from` was given, and where it pointed.
+    ///
+    /// Kept here, never in the manifest: a replay changes no hash (§3 issue 29).
     snapshot_from: Option<String>,
+    /// Whether external data was replayed rather than fetched.
+    replay: bool,
     /// The run directory, for a caller reading the file on its own.
     run_dir: String,
 }
@@ -174,6 +203,7 @@ impl Invocation {
                 .snapshot_from
                 .as_ref()
                 .map(|path| path.display().to_string()),
+            replay: options.snapshot_from.is_some(),
             run_dir: run_dir.display().to_string(),
         }
     }
@@ -231,9 +261,40 @@ fn notes(config: &ProjectConfig, allow_exec: bool, source: &ConfigSource) -> Vec
     notes
 }
 
+/// Writes each probed tool's raw version output as a blob.
+///
+/// The manifest already points at these references; writing them here makes the
+/// reference resolvable in the run directory, so a reader can see what each tool printed.
+fn write_tool_blobs(
+    run_dir: &Path,
+    probes: &std::collections::BTreeMap<String, crate::tools::ToolProbe>,
+) -> Result<(), RunError> {
+    let store = substance_runner::BlobStore::new(run_dir);
+    for probe in probes.values() {
+        store.put(probe.raw.as_bytes())?;
+    }
+    Ok(())
+}
+
 /// The config's content hash, as `sha256:<hex>`.
 fn hash_config(config: &ProjectConfig) -> Result<String, CanonicalJsonError> {
     config.config_hash()
+}
+
+/// Checks that `snapshot` is a run directory this build can replay from.
+///
+/// A missing directory is a usage error: the caller asked to replay data that is not
+/// there, and continuing would silently fetch it instead, which is the one thing
+/// `--snapshot-from` exists to prevent.
+fn ensure_run_dir(snapshot: &Path) -> Result<(), RunError> {
+    if !snapshot.is_dir() {
+        return Err(RunError::Usage(format!(
+            "{} is not a run directory; --snapshot-from needs a directory holding forge/, \
+             registry/ and tools/",
+            snapshot.display()
+        )));
+    }
+    Ok(())
 }
 
 /// Creates `directory` if it does not exist.

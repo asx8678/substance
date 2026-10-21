@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use substance_core::hash::{hex, sha256};
+use substance_runner::ExecPermit;
 use substance_runner::tool::{ToolError, run_tool_capture, run_tool_capture_any};
 
 /// How long a clone may take before it is killed.
@@ -23,7 +24,9 @@ const PLUMBING_TIMEOUT: Duration = Duration::from_secs(30);
 const STAGING_DIR: &str = ".intake";
 
 /// What intake pinned about the code under test.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Not `Clone`: the permit is a grant, and duplicating it would duplicate the grant.
+#[derive(Debug)]
 pub struct Checkout {
     /// The work tree root: the directory every later stage runs against.
     pub root: PathBuf,
@@ -33,6 +36,11 @@ pub struct Checkout {
     pub commit_sha: String,
     /// The `git --version` line, recorded in the manifest.
     pub git_version: String,
+    /// The permission to execute repo-controlled code, when `--allow-exec` was given.
+    ///
+    /// This is the only place a permit is created (§4.1); every stage that runs the
+    /// repository's own code asks the caller for it.
+    pub permit: Option<ExecPermit>,
 }
 
 /// Why intake could not pin a checkout.
@@ -126,6 +134,7 @@ pub async fn intake(
     input: &Path,
     rev: Option<&str>,
     out_root: &Path,
+    allow_exec: bool,
 ) -> Result<Checkout, IntakeError> {
     let text = input.to_str().map(str::to_owned);
     let from_url = text.as_deref().filter(|value| looks_like_url(value));
@@ -136,11 +145,17 @@ pub async fn intake(
     let commit_sha = resolve_commit(&root, rev.unwrap_or("HEAD")).await?;
     let origin = origin_of(&root).await;
     let git_version = git_version().await?;
+    let permit = if allow_exec {
+        Some(ExecPermit::grant())
+    } else {
+        None
+    };
     Ok(Checkout {
         root,
         origin,
         commit_sha,
         git_version,
+        permit,
     })
 }
 

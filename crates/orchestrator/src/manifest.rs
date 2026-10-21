@@ -39,6 +39,8 @@ pub struct ManifestInputs<'a> {
     pub config_hash: String,
     /// Whether `--allow-exec` was given.
     pub allow_exec: bool,
+    /// The tool versions probed from `tools.toml`, sorted by name.
+    pub tools: BTreeMap<String, ToolVersion>,
 }
 
 /// Builds the manifest, with `run_id` derived from everything else in it.
@@ -64,7 +66,7 @@ pub fn build(inputs: &ManifestInputs<'_>) -> Result<RunManifest, CanonicalJsonEr
         server_clock: ServerClock::Real,
         timezone: "UTC".to_owned(),
         locale: "en-US".to_owned(),
-        tools: tools_map(&inputs.checkout.git_version),
+        tools: inputs.tools.clone(),
         models: BTreeMap::new(),
         rule_pack_hash: NO_HASH.to_owned(),
         thresholds_version: NO_HASH.to_owned(),
@@ -110,21 +112,6 @@ pub fn default_master_seed(commit_sha: &str) -> u64 {
     let mut word = [0_u8; 8];
     word.copy_from_slice(&digest[..8]);
     u64::from_be_bytes(word)
-}
-
-/// The tools the manifest records: `git` alone, because intake is the only external
-/// tool this milestone runs.
-fn tools_map(git_version: &str) -> BTreeMap<String, ToolVersion> {
-    let mut tools = BTreeMap::new();
-    tools.insert(
-        "git".to_owned(),
-        ToolVersion {
-            tool: "git".to_owned(),
-            version: git_version.to_owned(),
-            output: None,
-        },
-    );
-    tools
 }
 
 /// The host, spelled the way the plan spells it (`macos`, `aarch64`).

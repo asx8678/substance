@@ -85,6 +85,7 @@ fn map_error(error: RunError) -> CliError {
     match error {
         RunError::Intake(inner) => CliError::Usage(inner.to_string()),
         RunError::Config(inner) => CliError::Usage(inner.to_string()),
+        RunError::Usage(text) => CliError::Usage(text),
         other => CliError::Internal(other.to_string()),
     }
 }
