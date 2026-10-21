@@ -15,7 +15,7 @@ use crate::config::ProjectConfig;
 use crate::hash::{CanonicalJsonError, canonical_json_pretty_value};
 use crate::model::{
     AppModel, CheckVerdict, DriverCommand, DriverEvent, EffectRecord, Finding, RecordPart, Report,
-    RunManifest,
+    RunManifest, seeding::Canaries,
 };
 
 /// Where the driver's generated types live, relative to the repository root.
@@ -78,6 +78,8 @@ pub enum SchemaKind {
     DriverEvent,
     /// One record part.
     RecordPart,
+    /// The canaries a run generated.
+    Canaries,
 }
 
 impl SchemaKind {
@@ -93,6 +95,7 @@ impl SchemaKind {
         Self::DriverCommand,
         Self::DriverEvent,
         Self::RecordPart,
+        Self::Canaries,
     ];
 
     /// The kebab-case slug, used as the file name.
@@ -109,6 +112,7 @@ impl SchemaKind {
             Self::DriverCommand => "driver-command",
             Self::DriverEvent => "driver-event",
             Self::RecordPart => "record-part",
+            Self::Canaries => "canaries",
         }
     }
 
@@ -132,6 +136,7 @@ impl SchemaKind {
             Self::DriverCommand => generator.into_root_schema_for::<DriverCommand>(),
             Self::DriverEvent => generator.into_root_schema_for::<DriverEvent>(),
             Self::RecordPart => generator.into_root_schema_for::<RecordPart>(),
+            Self::Canaries => generator.into_root_schema_for::<Canaries>(),
         };
         Ok(serde_json::to_value(schema)?)
     }
@@ -190,6 +195,7 @@ pub fn typescript_files() -> Result<Vec<TypeScriptFile>, TypeScriptError> {
     collector.visit::<DriverCommand>();
     collector.visit::<DriverEvent>();
     collector.visit::<RecordPart>();
+    collector.visit::<Canaries>();
     if let Some(error) = collector.error {
         return Err(error);
     }

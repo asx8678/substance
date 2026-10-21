@@ -10,6 +10,7 @@ pub mod intake;
 pub mod manifest;
 pub mod provenance;
 pub mod run;
+pub mod runtime;
 pub mod stage;
 pub mod thresholds;
 pub mod tools;
@@ -27,6 +28,7 @@ pub use manifest::{
 };
 pub use provenance::{PanelInputs, provenance};
 pub use run::{GateHit, RunError, RunOptions, RunOutcome, run};
+pub use runtime::{RuntimeInput, RuntimeOutcome, SEEDED, canaries_of};
 pub use stage::Stage;
 pub use thresholds::THRESHOLDS_TOML;
 pub use tools::{TOOLS_TOML, ToolProbe, manifest_tools, probe_versions, tool_reason};

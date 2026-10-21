@@ -146,7 +146,7 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
             (InterruptGuard::none(), receiver)
         }
     };
-    let ending = run_stages(options, &mut interrupted).await;
+    let ending = run_stages(options, &registrar, &mut interrupted).await;
     match ending {
         // An interrupt won a `select!` below, so the listener is already running the cleanup. It is
         // awaited here, before this function returns: returning first would drop the runtime the
@@ -176,6 +176,7 @@ const CLEANUP_WAIT: u64 = 10;
 /// takes the registrar so the listener can stop them. `run` holds it for that reason.
 async fn run_stages(
     options: &RunOptions,
+    registrar: &Registrar,
     interrupted: &mut tokio::sync::broadcast::Receiver<()>,
 ) -> Result<RunOutcome, RunError> {
     let out_root = options
@@ -209,6 +210,10 @@ async fn run_stages(
     // with different gitleaks versions are different runs.
     let tools_file = table().map_err(|error| RunError::Tools(error.to_string()))?;
     let probes = probe_versions(&tools_file, &checkout.root).await;
+    // The generator seeds are parts of the manifest, so they are derived here and the runtime stage
+    // is handed the same map: a seed the stage used but the manifest did not record would make two
+    // different runs share one run id.
+    let seeds = substance_core::model::seeds_for(master_seed, crate::runtime::GENERATORS);
     let manifest = build(&ManifestInputs {
         checkout: &checkout,
         as_of,
@@ -219,6 +224,7 @@ async fn run_stages(
         thresholds_version: crate::thresholds::version(),
         rule_pack_hash: substance_statics::rule_pack_hash(),
         provenance_rules_hash: substance_core::provenance::DeclaredRules::hash(),
+        seeds,
     })?;
     let run_dir = RunDir::create(&out_root, &manifest.run_id)?;
     run_dir.write_json("manifest.json", &manifest)?;
@@ -274,6 +280,38 @@ async fn run_stages(
         run_dir.write_json(&name, finding)?;
     }
 
+    // The runtime stage: database, app, seed, accounts, `seeded` snapshot. It runs after triage
+    // because triage needs no app and its checks are the ones that can still judge a repository
+    // whose boot fails. Every missing prerequisite is a note, so a run without `--allow-exec` or
+    // without a database still writes a complete report.
+    let runtime_tools: Vec<(String, substance_core::tools::ToolSpec)> = tools_file
+        .tools
+        .iter()
+        .map(|(name, spec)| (name.clone(), spec.clone()))
+        .collect();
+    let runtime = crate::runtime::run(&crate::runtime::RuntimeInput {
+        config: &config,
+        work: checkout.root.as_path(),
+        run_dir: run_dir.as_path(),
+        run_id: &manifest.run_id,
+        master_seed,
+        tools: &runtime_tools,
+        permit: checkout.permit.as_ref(),
+        registrar,
+    })
+    .await;
+    let mut runtime_notes = Vec::new();
+    match runtime {
+        Ok(outcome) => {
+            // `canaries.json` is written even when nothing ran: it is what B13 reads, and a file that
+            // appeared only on a full run would make B13's absence indistinguishable from a
+            // missing file.
+            run_dir.write_json("canaries.json", &outcome.canaries)?;
+            runtime_notes = outcome.notes;
+        }
+        Err(note) => runtime_notes.push(note),
+    }
+
     let mut gates_hit: Vec<GateHit> = Vec::new();
     for row in &triage.verdicts {
         // A hard gate fires on the check's own failure under `Always`, and on a *named* part's
@@ -301,6 +339,7 @@ async fn run_stages(
         provenance: triage.provenance,
         notes: {
             let mut notes = triage.notes_all;
+            notes.extend(runtime_notes);
             notes.extend(run_notes(&config, options.allow_exec, &source));
             notes.sort();
             notes.dedup();

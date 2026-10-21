@@ -49,7 +49,7 @@ use std::time::Duration;
 
 use substance_core::config::ProjectConfig;
 use substance_core::model::{BootOutcome, BootRung, CommandSpec, Friction};
-use substance_runner::{AppProcess, Budget, ExecPermit, ProcessSpec, WorkCopy};
+use substance_runner::{AppProcess, Budget, ExecPermit, OwnedApp, ProcessSpec, WorkCopy};
 
 use crate::boot::{BootEnv, BootError, FreshCopy, prepare};
 use crate::stack::{BootPlan, RepoView};
@@ -248,6 +248,100 @@ pub fn preferred_rung(repo: &RepoView, cfg: &ProjectConfig) -> Option<(BootRung,
         .cloned()
 }
 
+/// What a boot attempt produced: the data a report records, and the handle it hands over.
+///
+/// Two fields rather than one richer `BootOutcome`, because they belong to different layers: the
+/// outcome is a serialized model type that `substance-core` owns and the report schema describes,
+/// while the handle is a live process from `substance-runner`. Putting the handle inside the model
+/// would make every crate that reads a report depend on the process supervisor.
+#[derive(Debug)]
+pub struct Booted {
+    /// The rung that worked, its friction and why it failed when none did.
+    pub outcome: BootOutcome,
+    /// The running app, when one booted. `None` when every rung failed.
+    pub app: Option<BootedApp>,
+}
+
+/// The app a boot produced, plus the private copy it runs out of when rung 1 booted it.
+///
+/// The copy lives **here**, not in the ladder's local scope, because dropping it while the app runs
+/// would delete the directory the process has its working directory in. It is also why this type
+/// exists instead of \`BootOutcome\` simply carrying an \`OwnedApp\`: the two drops have to be ordered,
+/// and a struct makes that ordering a property of the type rather than of every call site.
+///
+/// ## Why the ladder cannot just return the port
+///
+/// Everything after a boot needs the app *running*: migrate and seed run against the live database,
+/// the accounts are created through the app's own signup, and the `seeded` snapshot needs the app
+/// **stopped**, which needs the [`StoppedApp`] token only [`OwnedApp::stop`] can produce. A boot
+/// that stopped its own server would make every one of those impossible.
+#[derive(Debug)]
+pub struct BootedApp {
+    /// The running app.
+    app: OwnedApp,
+    /// The rung's private export, when the rung that booted was rung 1.
+    copy: Option<WorkCopy>,
+}
+
+impl BootedApp {
+    /// The running app.
+    #[must_use]
+    pub fn app(&self) -> &AppProcess {
+        self.app.app()
+    }
+
+    /// The process group, for the interrupt registrar.
+    #[must_use]
+    pub fn pgid(&self) -> i32 {
+        self.app.app().pgid()
+    }
+
+    /// The port it answers on, when its spec asked for one.
+    #[must_use]
+    pub fn port(&self) -> Option<u16> {
+        self.app.app().port()
+    }
+
+    /// The rung's private copy, when this app runs out of one.
+    #[must_use]
+    pub fn copy(&self) -> Option<&WorkCopy> {
+        self.copy.as_ref()
+    }
+
+    /// Stops the app and returns proof that it is gone, ready for a snapshot or a reset.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever [`OwnedApp::stop`] returns: a stop that could not confirm the process
+    /// group was empty produces no token, because a token that might be false is worse than none.
+    pub async fn stop(
+        &mut self,
+        grace: Duration,
+    ) -> Result<substance_runner::StoppedApp, substance_runner::ProcessError> {
+        let (_info, token) = self.app.stop(grace).await?;
+        Ok(token)
+    }
+
+    /// Removes the rung's copy, if it has one and the app is stopped.
+    ///
+    /// Refuses while the app runs: the directory is the app's working directory, and deleting it
+    /// under a live process turns a working boot into a mystery. A caller that wants the space back
+    /// stops first, which is the order every stage after a boot already uses.
+    ///
+    /// # Errors
+    ///
+    /// Returns the removal error, or a refusal while the app is still running.
+    pub fn remove_copy(&mut self) -> Result<(), String> {
+        if !self.app.app().is_stopped() {
+            return Err("the app is still running, so its copy cannot be removed".to_owned());
+        }
+        let Some(copy) = self.copy.take() else {
+            return Ok(());
+        };
+        copy.remove().map_err(|error| error.to_string())
+    }
+}
+
 /// The order rungs are *tried* in: the preferred rung first, then the rest by rung number.
 ///
 /// Trying rung 1 first would boot whatever a README says even when the owner configured a start
@@ -293,11 +387,11 @@ pub async fn boot(
     env: &BootEnv<'_>,
     shutdown: Budget,
     permit: &ExecPermit,
-) -> Result<BootOutcome, BootError> {
+) -> Result<Booted, BootError> {
     let attempts = order(repo, cfg);
     if attempts.is_empty() {
         return Err(BootError::NoStart {
-            plan: "no rung offers a start command".to_owned(),
+            plan: "no rung offers one".to_owned(),
         });
     }
     let mut friction: Vec<Friction> = Vec::new();
@@ -351,17 +445,22 @@ pub async fn boot(
         }
         // The one-shot steps passed; now the server.
         match start_app(&plan, &rung_env, shutdown, permit).await {
-            Ok(port) => {
+            Ok(app) => {
                 // A successful README boot keeps its copy: the app the caller is about to probe
                 // is running out of it, and removing the directory under a live process would
-                // turn a working boot into a crash with no explanation.
-                return Ok(BootOutcome {
-                    rung: Some(rung),
-                    booted: true,
-                    port: Some(port),
-                    may_be_dev_server: rung.may_be_dev_server(),
-                    friction,
-                    failure: None,
+                // turn a working boot into a crash with no explanation. The copy is handed to the
+                // app so it is removed when the app is dropped, and not before.
+                let app = BootedApp { app, copy: export };
+                return Ok(Booted {
+                    outcome: BootOutcome {
+                        rung: Some(rung),
+                        booted: true,
+                        port: app.port(),
+                        may_be_dev_server: rung.may_be_dev_server(),
+                        friction,
+                        failure: None,
+                    },
+                    app: Some(app),
                 });
             }
             Err(reason) => {
@@ -383,13 +482,16 @@ pub async fn boot(
             }
         }
     }
-    Ok(BootOutcome {
-        rung: None,
-        booted: false,
-        port: None,
-        may_be_dev_server: false,
-        friction,
-        failure: last_failure,
+    Ok(Booted {
+        outcome: BootOutcome {
+            rung: None,
+            booted: false,
+            port: None,
+            may_be_dev_server: false,
+            friction,
+            failure: last_failure,
+        },
+        app: None,
     })
 }
 
@@ -459,15 +561,16 @@ fn remove_copy(copy: Option<&WorkCopy>, friction: &mut Vec<Friction>, rung: Boot
 
 /// Starts the plan's server and waits for it to answer.
 ///
-/// The `AppProcess` is stopped before returning: this function's job is to prove the app boots and
-/// to return its port, not to keep it running. A caller that needs it running (a probe) calls
-/// [`start_app`] itself and holds the handle.
+/// The app is left **running** and returned as an [`OwnedApp`]. That is the carry-forward from
+/// M2-T03: a caller that boots and stops an app inside one function can never hold a `StopLatch`
+/// taken before the stop, and so can never get the `StoppedApp` a snapshot or a reset needs.
+/// Returning the handle is what makes "boot, do work, stop, snapshot" expressible at all.
 async fn start_app(
     plan: &BootPlan,
     env: &BootEnv<'_>,
     shutdown: Budget,
     permit: &ExecPermit,
-) -> Result<u16, String> {
+) -> Result<OwnedApp, String> {
     let Some(start) = &plan.start else {
         return Err("the plan has no start command".to_owned());
     };
@@ -477,6 +580,10 @@ async fn start_app(
         .with_home(env.home)
         .with_limits(env.limits);
     spec.args.clone_from(&start.args);
+    // The run's environment first, so a plan entry that sets the same variable deliberately wins.
+    for (key, value) in env.env {
+        spec = spec.with_env(key, value);
+    }
     for (key, value) in &plan.env {
         spec = spec.with_env(key, value);
     }
@@ -484,8 +591,12 @@ async fn start_app(
         .await
         .map_err(|error| error.to_string())?;
     let ready = app.wait_ready(Budget::after("runtime", READY_CAP)).await;
-    let port = app.port().unwrap_or(0);
-    let _ = app.stop(Duration::from_secs(5)).await;
-    ready.map_err(|error| error.to_string())?;
-    Ok(port)
+    if let Err(error) = ready {
+        // A server that never answered is stopped here rather than handed back: the caller asked
+        // for a running app, and a handle to something that is not listening is not one. Short
+        // grace period, because it just failed to start and has nothing in flight.
+        let _ = app.stop(Duration::from_secs(5)).await;
+        return Err(error.to_string());
+    }
+    Ok(OwnedApp::new(app))
 }

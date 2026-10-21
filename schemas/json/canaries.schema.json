@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "Canary": {
+      "additionalProperties": false,
+      "description": "One canary value, and who owns it.\n\nThe owning handle is what makes a hit meaningful: a canary found in another user's response is a\nleak, and the same canary in its owner's own response is the app working (B13 says so, and the\ncheck would be unusable without it).",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/CanaryKind",
+          "description": "What the value is for."
+        },
+        "owner": {
+          "description": "The handle of the account whose data holds it.",
+          "type": "string"
+        },
+        "role": {
+          "description": "The role the owner has, so a check can compare across roles without a second lookup.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value to search for. Not a secret: it is written into the app's own data.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "owner",
+        "role",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "CanaryKind": {
+      "description": "What a canary is for, so a check that finds one knows what it proves.",
+      "oneOf": [
+        {
+          "const": "user_data",
+          "description": "A string written into the owning user's own data (B13).",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Every canary of one run, sorted.\n\nSorted by `(owner, kind, value)` rather than by value, because the file is read by a person\nasking \"what does this user own\" far more often than by one searching for a string. The search\npath builds its own index; the file is the record.\n\nWritten to `canaries.json` in the run directory. Not part of the report: the report describes\nthe code under test, and the canaries describe values substance itself generated.",
+  "properties": {
+    "canaries": {
+      "description": "One entry per generated value, sorted by owner, kind and value.",
+      "items": {
+        "$ref": "#/$defs/Canary"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "canaries"
+  ],
+  "title": "Canaries",
+  "type": "object"
+}

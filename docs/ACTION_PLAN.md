@@ -2226,7 +2226,7 @@ Tick each task in the same commit that completes it.
 - [x] M2-T01 Working copy and supervisor
 - [x] M2-T02 StackAdapter and TS stacks
 - [x] M2-T03 DbAdapter
-- [ ] M2-T04 Seeding and accounts
+- [x] M2-T04 Seeding and accounts
 - [ ] M2-T05 O01–O05
 - [ ] M2-T06 doctor
 - [ ] M3-T01 TS driver

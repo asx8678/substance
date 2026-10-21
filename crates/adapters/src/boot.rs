@@ -39,7 +39,10 @@ const STEP_CAP: Duration = Duration::from_secs(900);
 #[derive(Debug, thiserror::Error)]
 pub enum BootError {
     /// The plan has no start command, so there is nothing to boot.
-    #[error("the {plan} plan has no start command")]
+    ///
+    /// The plan's name is quoted rather than put in a sentence: a plan with no name reads "the
+    /// plan", which is the truth, and the ladder's "no rung at all" reason reads as itself.
+    #[error("the plan needs a start command, and {plan}")]
     NoStart {
         /// Which plan it was.
         plan: String,
@@ -87,11 +90,18 @@ pub async fn prepare(
         });
     }
     let mut friction = Vec::new();
+    // A deferred seed is the caller's step, run after the app is up: running it here too would seed
+    // the database twice, and a seed that is not idempotent would fail the second time.
+    let seed = if env.defer_seed {
+        None
+    } else {
+        plan.seed.as_ref()
+    };
     let steps: [(&str, Option<&CommandSpec>); 4] = [
         ("install", plan.install.as_ref()),
         ("build", plan.build.as_ref()),
         ("migrate", plan.migrate.as_ref()),
-        ("seed", plan.seed.as_ref()),
+        ("seed", seed),
     ];
     for (name, command) in steps {
         let Some(command) = command else {
@@ -146,6 +156,20 @@ pub struct BootEnv<'a> {
     /// caller that has no source repository), and the README rung then runs in `work` and says so
     /// in its friction, because refusing to boot at all would be worse than a known-risky attempt.
     pub fresh_copy: Option<&'a FreshCopy<'a>>,
+    /// Whether the caller seeds after the app is up, instead of during the boot.
+    ///
+    /// The runtime stage seeds the *live* database and then snapshots it, so a seed that ran inside
+    /// the boot would run twice. A caller that seeds itself sets this and leaves `seed` out of the
+    /// steps that run here; the plan still records the command, because the adapter's detection is
+    /// what found it. Default `false`: a boot on its own seeds, which is what a probe wants.
+    pub defer_seed: bool,
+    /// Environment the run needs, on top of the plan's own: the database's URL, typically.
+    ///
+    /// Applied to every step and to the server, and merged *under* the plan's entries, so a plan
+    /// that sets a variable deliberately (a fixed `PORT`, a `NODE_ENV=production`) is not overridden
+    /// by an ambient default. Sorted by name because it is written into every step's environment,
+    /// and a step's environment is part of what makes two runs comparable.
+    pub env: &'a std::collections::BTreeMap<String, String>,
 }
 
 /// A source commit that can be exported again, as many times as the ladder needs.
@@ -175,6 +199,8 @@ impl BootEnv<'_> {
             logs: self.logs,
             limits: self.limits,
             fresh_copy: self.fresh_copy,
+            defer_seed: self.defer_seed,
+            env: self.env,
         }
     }
 }
@@ -184,6 +210,10 @@ fn to_step(command: &CommandSpec, plan: &BootPlan, env: &BootEnv<'_>, name: &str
     let mut step = OneShot::new(&command.program, &command.args, env.work, name)
         .with_home(env.home)
         .with_limits(env.limits);
+    // The run's environment first, so a plan entry that sets the same variable deliberately wins.
+    for (key, value) in env.env {
+        step = step.with_env(key, value);
+    }
     for (key, value) in &plan.env {
         step = step.with_env(key, value);
     }

@@ -27,6 +27,8 @@ use substance_core::ids::SnapshotId;
 use substance_core::model::{Capabilities, DbHandle, Measured};
 use substance_runner::{ExecPermit, StoppedApp};
 
+pub mod cleanup;
+pub mod factory;
 pub mod postgres;
 pub mod sqlite;
 pub mod supabase;

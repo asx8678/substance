@@ -12,6 +12,7 @@ pub mod normalize;
 pub mod protocol;
 pub mod report;
 pub mod seed;
+pub mod seeding;
 pub mod stack;
 pub mod verdict;
 
@@ -37,5 +38,6 @@ pub use protocol::{
 pub use report::{
     Archetype, Coverage, KnowledgeCutoff, Provenance, REPORT_SCHEMA_VERSION, Ratio, Report,
 };
+pub use seeding::{Canaries, Canary, CanaryKind, canary_value, seed_of, seeds_for};
 pub use stack::{BootOutcome, BootRung, CommandSpec, Friction, RouteEntry, RouteTable};
 pub use verdict::{CheckVerdict, Target, Verdict};

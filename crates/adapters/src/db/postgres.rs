@@ -765,6 +765,61 @@ impl DbAdapter for PostgresAdapter {
     }
 }
 
+/// Drops a run's slot and databases, reading the admin URL from the environment again.
+///
+/// The interrupt path's equivalent of [`PostgresAdapter::teardown`], for a caller that holds the
+/// *names* rather than the adapter: `DatabaseCleanup` in [`super::cleanup`]. It reads
+/// `SUBSTANCE_PG_ADMIN_URL` itself and never keeps it, for the same reason the adapter does not put
+/// it in a message -- the registrar is long-lived and freely cloned.
+///
+/// Idempotent, so it is safe beside the adapter's own teardown and the drop guard: a slot is dropped
+/// only when it is listed, and every database is dropped with `IF EXISTS`.
+///
+/// Every failure is a line in the returned list rather than an error, because the caller is an
+/// interrupt handler with no one left to hand an error to.
+pub async fn drop_names(databases: &[String], slot: &str) -> Vec<String> {
+    let mut removed = Vec::new();
+    let Ok(url) = std::env::var(ADMIN_URL_ENV) else {
+        return vec![format!(
+            "postgres: {ADMIN_URL_ENV} is not set, so nothing could be torn down"
+        )];
+    };
+    let Ok(config) = url.parse::<Config>() else {
+        return vec!["postgres: the admin URL is not usable, so nothing was torn down".to_owned()];
+    };
+    let Ok((client, connection)) = config.connect(NoTls).await else {
+        return vec!["postgres: could not connect, so nothing was torn down".to_owned()];
+    };
+    let task = tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    let listed = client
+        .simple_query(&format!(
+            "SELECT slot_name FROM pg_replication_slots WHERE slot_name = '{slot}'"
+        ))
+        .await;
+    if listed.is_ok()
+        && client
+            .batch_execute(&format!("SELECT pg_drop_replication_slot('{slot}')"))
+            .await
+            .is_ok()
+    {
+        removed.push(format!("slot {slot}"));
+    }
+    for name in databases {
+        if client
+            .batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+            .await
+            .is_ok()
+        {
+            removed.push(format!("database {name}"));
+        }
+    }
+    task.abort();
+    removed.sort();
+    removed
+}
+
 /// Implementation of the runner's interrupt cleanup, so a Ctrl-C tears the databases down.
 ///
 /// The runner cannot name this type (`substance-adapters` depends on `substance-runner`, not the

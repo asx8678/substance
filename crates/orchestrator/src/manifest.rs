@@ -48,6 +48,12 @@ pub struct ManifestInputs<'a> {
     pub rule_pack_hash: String,
     /// The provenance rule files' sha256, from the embedded `rules/provenance/*.toml`.
     pub provenance_rules_hash: String,
+    /// One seed per generator, derived from `master_seed`.
+    ///
+    /// Filled in by the caller before the run id is derived, because a seed is an input: two runs
+    /// that agree on everything but a generator seed must not share a run id, and a manifest that
+    /// recorded the seed only after hashing would let them.
+    pub seeds: BTreeMap<String, u64>,
 }
 
 /// Builds the manifest, with `run_id` derived from everything else in it.
@@ -68,7 +74,8 @@ pub fn build(inputs: &ManifestInputs<'_>) -> Result<RunManifest, CanonicalJsonEr
         access_mode: AccessMode::Repo,
         as_of: inputs.as_of,
         master_seed: inputs.master_seed,
-        seeds: BTreeMap::new(),
+        // Before `derive_run_id`: the seeds are inputs, so they belong inside the hash.
+        seeds: inputs.seeds.clone(),
         frozen_clock: inputs.as_of,
         server_clock: ServerClock::Real,
         timezone: "UTC".to_owned(),
