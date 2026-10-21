@@ -1,0 +1,5 @@
+# Local Pi agent state (runtime mesh state, caches, worker config)
+.pi/
+
+# macOS
+.DS_Store
