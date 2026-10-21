@@ -1,6 +1,8 @@
 //! Content-derived identifiers (ADR-0009) and blob references.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::hash::{base32_lower, hex, sha256};
 
@@ -26,8 +28,10 @@ macro_rules! id_type {
         $(#[$meta])*
         ///
         #[doc = $doc]
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-        #[serde(transparent)]
+        #[derive(
+            Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+            TS,
+        )]
         pub struct $name(String);
 
         impl $name {
@@ -78,8 +82,9 @@ id_type!(
 );
 
 /// A content-addressed blob reference, written as `sha256:<hex>`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 pub struct BlobRef(String);
 
 impl BlobRef {

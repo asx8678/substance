@@ -2,13 +2,17 @@
 
 use std::fmt;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Every check in the catalog, in ID order.
 ///
 /// The discriminants are positional, so `CheckId::B01 as usize == 0` and
 /// `id as usize` is the registry index.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[repr(u8)]
 pub enum CheckId {
@@ -735,7 +739,9 @@ impl fmt::Display for CheckId {
 }
 
 /// A check family, named by the ID prefix letter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 pub enum Family {
     /// Behavioral checks (B).
     #[serde(rename = "B")]
@@ -814,7 +820,9 @@ impl Family {
 }
 
 /// How bad a failure is. Fixed per check, uncalibrated (ADR-0010).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     /// Critical: a hard gate or a severe trust failure.
@@ -830,7 +838,9 @@ pub enum Severity {
 }
 
 /// How much a finding can be trusted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Confidence {
     /// Confirmed by behavior.
@@ -842,7 +852,9 @@ pub enum Confidence {
 }
 
 /// How destructive a check is. Recorded, but gates nothing in v1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 pub enum Level {
     /// L0: reads the repository or recorded data only.
     #[serde(rename = "L0")]
@@ -859,7 +871,9 @@ pub enum Level {
 }
 
 /// The independent questions a score answers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Axis {
     /// Works now.
@@ -885,7 +899,9 @@ pub enum Axis {
 }
 
 /// What a check needs before it can run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Need {
     /// The repository under test.
@@ -913,7 +929,9 @@ pub enum Need {
 }
 
 /// The milestone that delivers a check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 pub enum Milestone {
     /// M1.
     #[serde(rename = "M1")]
@@ -960,7 +978,9 @@ pub enum Milestone {
 }
 
 /// How far a check has been built.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     /// Registered; its task has not landed.

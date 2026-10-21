@@ -1,0 +1,87 @@
+{
+  "id": "rec_3ptvri2ayyioatapncnp4xugz5",
+  "run_id": "run_3ptvri2ayyioatapncnp4xugz5",
+  "check_id": "B01",
+  "target": { "screen": "/invoices/new" },
+  "snapshot": "snap_seeded_v1",
+  "repetition": 1,
+  "seed": "4211",
+  "setup": [
+    {
+      "kind": "login",
+      "target": "",
+      "screen": "/login",
+      "input": { "mode": "ui" }
+    },
+    {
+      "kind": "goto",
+      "target": "",
+      "screen": "/invoices/new",
+      "input": {}
+    }
+  ],
+  "action": {
+    "kind": "click",
+    "target": "role=button[name='Save']",
+    "screen": "/invoices/new",
+    "input": {}
+  },
+  "injected": { "failure": null },
+  "ui": {
+    "url_before": "/invoices/new",
+    "url_after": "/invoices/42",
+    "dom_changed": true,
+    "dom_hash_before": "8d1f0d1d2f6d3c9a5a2b7f4e6c1d0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c",
+    "dom_hash_after": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+    "download": null,
+    "dialog": null
+  },
+  "net": [
+    {
+      "method": "POST",
+      "path": "/api/invoices",
+      "status": 201,
+      "req_body": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "res_body": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "failed": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/invoices/42",
+      "status": null,
+      "req_body": null,
+      "res_body": null,
+      "failed": "net::ERR_ABORTED"
+    }
+  ],
+  "ws": { "status": "measured", "value": [] },
+  "storage": { "local": {}, "session": {}, "indexeddb": {}, "cookies": {} },
+  "db": {
+    "status": "measured",
+    "value": {
+      "insert": { "counts": { "invoices": 1, "invoice_lines": 3 }, "rows": "sha256:0000000000000000000000000000000000000000000000000000000000000000" },
+      "update": { "counts": {}, "rows": null },
+      "delete": { "counts": {}, "rows": null }
+    }
+  },
+  "logs": {
+    "console_errors": 0,
+    "page_errors": 0,
+    "server_errors": { "status": "measured", "value": 0 },
+    "server_lines": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "queries": { "status": "measured", "value": 7 },
+  "egress": {
+    "status": "measured",
+    "value": [
+      {
+        "host": "api.openai.com",
+        "method": "POST",
+        "bytes": 812,
+        "body": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "email": { "status": "measured", "value": [] },
+  "timing": { "settle_ms": 640, "timed_out": false }
+}

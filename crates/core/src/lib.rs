@@ -8,6 +8,7 @@ pub mod check;
 pub mod clock;
 pub mod hash;
 pub mod ids;
+pub mod model;
 pub mod registry;
 
 pub use check::{
@@ -16,4 +17,8 @@ pub use check::{
 pub use clock::{Timestamp, wall_now_utc};
 pub use hash::{CanonicalJsonError, canonical_json, canonical_json_value};
 pub use ids::{BlobRef, FindingId, RecordId, RunId, SnapshotId};
+pub use model::{
+    AppModel, CheckVerdict, EffectRecord, Evidence, Finding, Measured, Report, RunManifest, Target,
+    Verdict,
+};
 pub use registry::{CheckMeta, REGISTRY, meta};

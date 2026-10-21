@@ -1,16 +1,32 @@
 //! The only wall-clock access in the workspace (ADR-0009).
 
+use schemars::JsonSchema;
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use ts_rs::TS;
 
 /// An instant, truncated to whole seconds and always UTC.
 ///
 /// Serialized as RFC 3339 with a `Z` suffix, which keeps records byte-identical
 /// between runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, TS)]
+#[ts(type = "string")]
 pub struct Timestamp(OffsetDateTime);
+
+impl JsonSchema for Timestamp {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Timestamp")
+    }
+
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "type": "string",
+            "format": "date-time",
+        })
+    }
+}
 
 impl Timestamp {
     /// Truncates `instant` to whole seconds and normalizes it to UTC.
