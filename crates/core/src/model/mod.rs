@@ -11,6 +11,7 @@ pub mod normalize;
 pub mod protocol;
 pub mod report;
 pub mod seed;
+pub mod stack;
 pub mod verdict;
 
 pub use app_model::{
@@ -32,4 +33,5 @@ pub use protocol::{
 pub use report::{
     Archetype, Coverage, KnowledgeCutoff, Provenance, REPORT_SCHEMA_VERSION, Ratio, Report,
 };
+pub use stack::{BootOutcome, BootRung, CommandSpec, Friction, RouteEntry, RouteTable};
 pub use verdict::{CheckVerdict, Target, Verdict};

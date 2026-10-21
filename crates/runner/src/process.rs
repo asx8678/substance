@@ -64,6 +64,116 @@ pub const OWN_ENV: &[(&str, &str)] = &[
     ("FORCE_COLOR", "0"),
 ];
 
+/// Where a process's home and caches go, relative to the run directory.
+///
+/// `env_clear()` leaves `HOME` unset, and a process without `HOME` breaks in ways that look like
+/// application bugs: npm writes its cache under `~` and fails, pip cannot find its user config,
+/// cargo refuses to run, and git complains about `safe.directory`. The fix is not to inherit the
+/// user's `HOME` -- that would let repo-controlled code write into the developer's dotfiles, and
+/// would make two runs on one machine differ by whatever the developer had configured -- but to
+/// give every child a home of its own inside the run directory.
+///
+/// One variable is not enough, because tools disagree about where caches live:
+///
+/// - `HOME`, the fallback every tool understands.
+/// - `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`: the XDG trio, read by most modern
+///   Linux tools and by some macOS ones.
+/// - `npm_config_cache`, which wins over `HOME` for npm when both are set, plus `PNPM_HOME`,
+///   `YARN_CACHE_FOLDER` and `BUN_INSTALL_CACHE_DIR` for the other three JS package managers.
+/// - `CARGO_HOME` and `RUSTUP_HOME`, which otherwise write into `~/.cargo` and `~/.rustup`.
+/// - `GOPATH` and `GOMODCACHE` for Go.
+/// - `PIP_CACHE_DIR`, `POETRY_CACHE_DIR` and `UV_CACHE_DIR` for the Python installers.
+/// - `TMPDIR`, not a cache but the same problem: a build that fills the host's `/tmp` and never
+///   cleans up is a leak the run directory should contain.
+/// - `LOCALAPPDATA` and `APPDATA`, which Windows tools read instead of the XDG names.
+///
+/// Each is a subdirectory, so two tools cannot collide on one path, and the whole tree is deleted
+/// with the run directory.
+pub const HOME_DIR: &str = "home";
+
+/// The subdirectories of [`HOME_DIR`] that tools expect to exist.
+///
+/// Most tools create a missing cache directory, but the ones that do not fail with a message about
+/// the cache rather than about the directory, which sends a reader looking in the wrong place.
+pub const HOME_SUBDIRECTORIES: &[&str] = &[
+    "cache",
+    "cargo",
+    "config",
+    "go",
+    "local",
+    "npm",
+    "pip",
+    "pnpm",
+    "rustup",
+    "tmp",
+    "xdg-cache",
+    "xdg-config",
+    "xdg-data",
+    "yarn",
+];
+
+/// Creates `<run_dir>/home/` and its subdirectories, and returns the home directory.
+///
+/// Called once per run, before anything spawns, so a failure to create it is a run-level error
+/// rather than a mysterious failure of the first install command.
+///
+/// # Errors
+///
+/// Returns [`ProcessError::Io`] when the directory cannot be created.
+pub fn prepare_home(run_dir: &Path) -> Result<PathBuf, ProcessError> {
+    let home = run_dir.join(HOME_DIR);
+    create_home_dir(&home, HOME_DIR)?;
+    for name in HOME_SUBDIRECTORIES {
+        create_home_dir(&home.join(name), name)?;
+    }
+    Ok(home)
+}
+
+/// The environment variables that point a child at `home`.
+///
+/// Absolute paths, because a child's working directory is the work copy: a relative path would
+/// resolve somewhere else entirely, and a package manager's cache is the last place to discover
+/// that.
+#[must_use]
+pub fn home_env(home: &Path) -> Vec<(&'static str, String)> {
+    let at = |name: &str| home.join(name).display().to_string();
+    vec![
+        ("HOME", home.display().to_string()),
+        ("TMPDIR", at("tmp")),
+        ("XDG_CACHE_HOME", at("xdg-cache")),
+        ("XDG_CONFIG_HOME", at("xdg-config")),
+        ("XDG_DATA_HOME", at("xdg-data")),
+        ("npm_config_cache", at("npm")),
+        ("PNPM_HOME", at("pnpm")),
+        ("YARN_CACHE_FOLDER", at("yarn")),
+        ("BUN_INSTALL_CACHE_DIR", at("cache")),
+        ("CARGO_HOME", at("cargo")),
+        ("RUSTUP_HOME", at("rustup")),
+        ("GOPATH", at("go")),
+        (
+            "GOMODCACHE",
+            home.join("go")
+                .join("pkg")
+                .join("mod")
+                .display()
+                .to_string(),
+        ),
+        ("PIP_CACHE_DIR", at("pip")),
+        ("POETRY_CACHE_DIR", at("cache")),
+        ("UV_CACHE_DIR", at("cache")),
+        ("LOCALAPPDATA", at("local")),
+        ("APPDATA", at("config")),
+    ]
+}
+
+/// Creates one directory of the run's home tree.
+fn create_home_dir(dir: &Path, name: &str) -> Result<(), ProcessError> {
+    std::fs::create_dir_all(dir).map_err(|source| ProcessError::Io {
+        program: format!("the run's home directory ({name})"),
+        source,
+    })
+}
+
 /// The argument that asks for the allocated port: an argument equal to this string is replaced by
 /// the number.
 ///
@@ -95,6 +205,11 @@ pub struct ProcessSpec {
     pub piped_stdin: bool,
     /// Read stdout through a pipe the caller reads, in addition to the log file.
     pub piped_stdout: bool,
+    /// The run's home directory, applied as `HOME` and as the cache variables.
+    ///
+    /// On the spec rather than inherited, because there is no correct default: a spec built
+    /// without it must say so, and the supervisor cannot guess a run directory.
+    pub home: Option<PathBuf>,
     /// How to limit this command's resources.
     ///
     /// On the spec rather than on the call, because the answer belongs to the *kind* of command:
@@ -118,6 +233,7 @@ impl ProcessSpec {
             ready_path: None,
             piped_stdin: false,
             piped_stdout: false,
+            home: None,
             limits: Limits::Unavailable {
                 why: "this spec did not say how to limit its command",
             },
@@ -128,6 +244,13 @@ impl ProcessSpec {
     #[must_use]
     pub fn with_limits(mut self, limits: Limits) -> Self {
         self.limits = limits;
+        self
+    }
+
+    /// Points this command's home and caches at `home`.
+    #[must_use]
+    pub fn with_home(mut self, home: &Path) -> Self {
+        self.home = Some(home.to_path_buf());
         self
     }
 
@@ -652,6 +775,12 @@ async fn start(
     command.process_group(0);
     for (name, value) in OWN_ENV {
         command.env(name, value);
+    }
+    // Before the spec's own env, so an app that deliberately sets `HOME` keeps its value.
+    if let Some(home) = &spec.home {
+        for (name, value) in home_env(home) {
+            command.env(name, value);
+        }
     }
     // `PATH` is passed through deliberately: the plan's clean environment is about the app's
     // variables, not about hiding the programs the host provides. A fixed allowlist would break

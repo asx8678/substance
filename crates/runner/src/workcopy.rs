@@ -21,6 +21,15 @@
 //! wire up under `tokio`, and the plan forbids `unsafe` outright. The tarball is deleted as soon
 //! as it is unpacked, so a run does not keep two copies of the tree.
 //!
+//! ## Named exports
+//!
+//! A run may need a second copy of the same commit: the README rung of the boot ladder (M2-T02)
+//! runs arbitrary shell from a document, and a failed install there must not leave a half-built
+//! `node_modules` behind for the rung that follows. [`WorkCopy::create`] is the run's own copy and
+//! always lives at `work/`; [`WorkCopy::create_named`] names its directory, so the second copy is
+//! `work-readme/` and the two cannot be confused. Both export the same commit by the same means,
+//! and both are removed the same way: nothing about a named export is second class except its name.
+//!
 //! ## What an export is not
 //!
 //! `git archive` contains tracked files at that commit and nothing else: no `.git`, no untracked
@@ -96,6 +105,12 @@ pub enum WorkCopyError {
 const EXPORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 
 impl WorkCopy {
+    /// The directory name a run's own work copy lives under.
+    ///
+    /// Named because a second export needs a different name, and a reader of a run directory
+    /// should be able to tell which copy is which without opening a manifest.
+    pub const DIR: &'static str = "work";
+
     /// Exports `commit_sha` from the repository at `source` into `<run_dir>/work/`.
     ///
     /// The directory is created fresh; an existing `work/` is removed first, so a retry in a
@@ -112,15 +127,46 @@ impl WorkCopy {
         run_dir: &Path,
         run_id: &RunId,
     ) -> Result<Self, WorkCopyError> {
+        Self::create_named(source, commit_sha, run_dir, run_id, Self::DIR).await
+    }
+
+    /// Exports `commit_sha` into `<run_dir>/<name>/`.
+    ///
+    /// For a copy that must stay independent of the run's own tree: the boot ladder's README rung
+    /// is handed `"work-readme"` so its install cannot dirty the copy rungs 2 and 3 use. `name`
+    /// must be a single path component -- a caller that passed `../x` would be exporting outside
+    /// the run directory, which is the one thing this module exists to prevent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkCopyError::Io`] when `name` is not a single component, along with everything
+    /// [`Self::create`] returns.
+    pub async fn create_named(
+        source: &Path,
+        commit_sha: &str,
+        run_dir: &Path,
+        run_id: &RunId,
+        name: &str,
+    ) -> Result<Self, WorkCopyError> {
         let _ = run_id;
         ensure_repository(source).await?;
-        let root = run_dir.join("work");
+        if Path::new(name).components().count() != 1 || name.starts_with('.') {
+            return Err(WorkCopyError::Io {
+                path: run_dir.join(name),
+                source: io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "a work copy's name must be a single path component",
+                ),
+            });
+        }
+        let root = run_dir.join(name);
         remove_dir(&root)?;
         create_dir(&root)?;
 
         // `git archive` names the output with `-o` rather than writing to a pipe, so no stdin
-        // wiring is needed and the two programs stay separate.
-        let tarball = run_dir.join("work.tar");
+        // wiring is needed and the two programs stay separate. The tarball is named after the
+        // copy, so two exports in one run cannot overwrite each other's.
+        let tarball = run_dir.join(format!("{name}.tar"));
         let tarball_arg = tarball.as_os_str();
         let out = run_tool_capture_any(
             "git",
