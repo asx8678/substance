@@ -8,6 +8,7 @@ mod checks;
 mod cli;
 mod error;
 mod output;
+mod run;
 mod schema;
 
 use std::process::ExitCode;
@@ -43,7 +44,7 @@ fn run() -> Result<ExitCode, CliError> {
 /// Runs one subcommand.
 fn dispatch(command: Command) -> Result<ExitCode, CliError> {
     match command {
-        Command::Run(_args) => not_yet("M0"),
+        Command::Run(args) => run::run_command(&args),
         Command::Replay(_args) => not_yet("M3"),
         Command::Bench(_args) => not_yet("M5"),
         Command::Report(_args) => not_yet("M13"),

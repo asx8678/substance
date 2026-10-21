@@ -977,6 +977,29 @@ pub enum Milestone {
     Later,
 }
 
+impl Milestone {
+    /// The milestone as the plan spells it: `M1` … `M13`, or `later`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::M1 => "M1",
+            Self::M2 => "M2",
+            Self::M3 => "M3",
+            Self::M4 => "M4",
+            Self::M5 => "M5",
+            Self::M6 => "M6",
+            Self::M7 => "M7",
+            Self::M8 => "M8",
+            Self::M9 => "M9",
+            Self::M10 => "M10",
+            Self::M11 => "M11",
+            Self::M12 => "M12",
+            Self::M13 => "M13",
+            Self::Later => "later",
+        }
+    }
+}
+
 /// How far a check has been built.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,

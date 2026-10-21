@@ -50,6 +50,59 @@ impl Verdict {
     }
 }
 
+impl Verdict {
+    /// Combines the verdicts of a check's parts into the check's own verdict.
+    ///
+    /// The precedence is `fail` > `flaky` > `unverifiable` > `not_measured` >
+    /// `reported` > `pass`: the first of these that any part has is the check's answer.
+    ///
+    /// - any `fail` fails the check, whatever the other parts say;
+    /// - `flaky` and `unverifiable` keep their own meaning, and a part that could not
+    ///   decide outranks one that did;
+    /// - `reported` is neither pass nor fail (ADR-0013), so when every part merely
+    ///   reported metrics and none set a threshold, the check stays `reported`: it is
+    ///   never raised to `pass`;
+    /// - `pass` is the answer only when every part passed.
+    ///
+    /// A check with no parts at all is `not_measured("no parts")`, not `pass`: nothing
+    /// measured is never a pass (principle 8).
+    #[must_use]
+    pub fn aggregate(parts: &BTreeMap<String, Verdict>) -> Self {
+        let mut flaky: Option<&Verdict> = None;
+        let mut unverifiable: Option<&Verdict> = None;
+        let mut not_measured: Option<&Verdict> = None;
+        let mut reported = false;
+        for part in parts.values() {
+            match part {
+                Self::Fail => return Self::Fail,
+                Self::Flaky => flaky = flaky.or(Some(part)),
+                Self::Unverifiable { .. } => unverifiable = unverifiable.or(Some(part)),
+                Self::NotMeasured { .. } => not_measured = not_measured.or(Some(part)),
+                Self::Reported => reported = true,
+                Self::Pass => {}
+            }
+        }
+        if let Some(part) = flaky {
+            return part.clone();
+        }
+        if let Some(part) = unverifiable {
+            return part.clone();
+        }
+        if let Some(part) = not_measured {
+            return part.clone();
+        }
+        if reported {
+            return Self::Reported;
+        }
+        if parts.is_empty() {
+            return Self::NotMeasured {
+                reason: "no parts".to_owned(),
+            };
+        }
+        Self::Pass
+    }
+}
+
 /// What a check or a record is about.
 ///
 /// Serialized in serde's external form: `"repo"` or `{"file": "src/main.rs"}`.

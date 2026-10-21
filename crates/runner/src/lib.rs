@@ -1,4 +1,6 @@
 //! Working copy handling, host processes, port allocation, the external-tool runner,
 //! and control of the egress proxy, Toxiproxy and Mailpit.
-//!
-//! Scaffold only: the module tree stays empty until this crate's tasks land.
+
+pub mod tool;
+
+pub use tool::{Captured, ToolError, run_tool_capture, run_tool_capture_any};

@@ -25,4 +25,6 @@ check "unseeded randomness (ADR-0009)" \
   rg -n --glob '*.rs' 'thread_rng|rand::random|from_entropy|OsRng|rand::rng\(' "${roots[@]}"
 check "HashMap/HashSet: use BTreeMap/BTreeSet (ADR-0009)" \
   rg -n --glob '*.rs' '\bHash(Map|Set)\b' "${roots[@]}"
+check "process spawning outside crates/runner" \
+  rg -n --glob '*.rs' --glob '!**/runner/src/**' 'Command::new' "${roots[@]}"
 exit $fail

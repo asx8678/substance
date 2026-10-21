@@ -1,3 +1,8 @@
 //! Scoring plus the report.json, report.html and SARIF output.
 //!
-//! Scaffold only: the module tree stays empty until this crate's tasks land.
+//! M0-T08 lands the run directory and `report.json` v0; scoring, the HTML report and
+//! SARIF follow in M13, M1-T12 and M13-T02.
+
+pub mod run_dir;
+
+pub use run_dir::{RunDir, RunDirError};

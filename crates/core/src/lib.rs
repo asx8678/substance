@@ -10,6 +10,7 @@ pub mod config;
 pub mod hash;
 pub mod ids;
 pub mod model;
+pub mod parts;
 pub mod registry;
 pub mod schema_export;
 
@@ -28,5 +29,6 @@ pub use model::{
     AppModel, CheckVerdict, EffectRecord, Evidence, Finding, Measured, Report, RunManifest, Target,
     Verdict,
 };
+pub use parts::{CheckPart, parts_of};
 pub use registry::{CheckMeta, REGISTRY, meta};
 pub use schema_export::{SchemaFile, SchemaKind, TYPESCRIPT_DIR, TypeScriptFile};

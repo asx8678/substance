@@ -226,6 +226,20 @@ pub enum FailOn {
     None,
 }
 
+impl FailOn {
+    /// Whether a run with `gates` failed gates must exit 1.
+    ///
+    /// No findings can be produced until M1, so only `gate` can fire today: the other
+    /// thresholds are about finding severities, and a run without findings hits none.
+    #[must_use]
+    pub fn wants_failure(self, gates: usize) -> bool {
+        match self {
+            Self::Gate => gates > 0,
+            Self::Critical | Self::High | Self::None => false,
+        }
+    }
+}
+
 /// The check states `checks list --status` accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum StatusFilter {
