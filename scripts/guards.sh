@@ -32,4 +32,15 @@ check "process spawning outside crates/runner" \
 check "ExecPermit grant outside crates/runner and orchestrator intake (M1-T01)" \
   rg -n --glob '*.rs' --glob '!**/runner/src/**' --glob '!**/orchestrator/src/intake.rs' \
     'ExecPermit::(new|grant|default)' "${roots[@]}"
+# M1-T07: the rule pack is embedded with include_str!, which needs a literal path, so a rule
+# file added to rules/ but not to FILES would be silently ignored — a rule nobody runs. The
+# guard is what makes "embedded" a property of the tree rather than of one list.
+if [ -d rules ]; then
+  check "every rules/<lang>/*.yml file is listed in the embedded rule pack (M1-T07)" \
+    sh -c 'for f in rules/*/*.yml; do [ -e "$f" ] || continue
+      grep -Fq "\"$f\"" crates/statics/src/rulepack.rs || echo "$f"; done | grep -q .'
+  check "every rule file carries metadata.check_id and metadata.sub_check (M1-T07)" \
+    sh -c 'for f in rules/*/*.yml; do [ -e "$f" ] || continue
+      grep -q "^  check_id:" "$f" && grep -q "^  sub_check:" "$f" || echo "$f"; done | grep -q .'
+fi
 exit $fail

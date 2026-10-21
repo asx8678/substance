@@ -1,0 +1,21 @@
+# Placeholder rule for the JavaScript rule directory (M1-T07).
+#
+# The engine in crates/statics loads rules from `rules/<lang>/*.yml`; this file proves the
+# directory loads, parses for its language, and compiles its matcher. M1-T08 replaces it with
+# the real S-check rules.
+#
+# Every rule must carry `metadata.check_id` (a catalog ID, S01-S12) and `metadata.sub_check`
+# (the named part of that check); a rule without them is a load error, not a silent no-op.
+#
+# The pattern names a function nothing calls, so the placeholder finds nothing in real code
+# while still giving ast-grep a concrete node kind to look for — a bare `$A` wildcard has no
+# potential kinds, and ast-grep rejects it.
+id: engine-js
+language: js
+severity: hint
+message: engine-js
+metadata:
+  check_id: S01
+  sub_check: engine-js
+rule:
+  pattern: __substance_engine_probe__($A)

@@ -149,6 +149,7 @@ pub async fn run(options: &RunOptions) -> Result<RunOutcome, RunError> {
         allow_exec: options.allow_exec,
         tools: manifest_tools(&probes),
         thresholds_version: crate::thresholds::version(),
+        rule_pack_hash: substance_statics::rule_pack_hash(),
     })?;
     let run_dir = RunDir::create(&out_root, &manifest.run_id)?;
     run_dir.write_json("manifest.json", &manifest)?;

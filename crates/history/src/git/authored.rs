@@ -279,6 +279,64 @@ impl GitRepo {
         Ok(blobs)
     }
 
+    /// Every blob at `rev` with its path, SHA and size in bytes, sorted by path.
+    ///
+    /// `ls-tree -r -l` adds the object size to the listing, which is how the static checks
+    /// skip files over their size limit without reading a single byte: one call answers
+    /// "which files are there, and how big is each" for the whole tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError`] when `git ls-tree` fails or times out.
+    pub async fn sized_blobs(&self, rev: &str) -> Result<Vec<BlobEntry>, GitError> {
+        let args = vec![
+            OsString::from("ls-tree"),
+            OsString::from("-r"),
+            OsString::from("-l"),
+            OsString::from("-z"),
+            OsString::from(rev),
+        ];
+        let stdout = self.run(GitCommand::ListTree, &args).await?;
+        let mut entries: Vec<BlobEntry> = stdout
+            .split('\0')
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| {
+                // `<mode> SP <type> SP <sha> SP+ <size> TAB <path>`
+                let (header, path) = line.split_once('\t')?;
+                let mut fields = header.split_whitespace();
+                let _mode = fields.next()?;
+                let kind = fields.next()?;
+                let sha = fields.next()?;
+                let size: u64 = fields.next()?.parse().ok()?;
+                (kind == "blob").then(|| BlobEntry {
+                    path: path.to_owned(),
+                    sha: sha.to_owned(),
+                    size,
+                })
+            })
+            .collect();
+        entries.sort_by(|left, right| left.path.cmp(&right.path));
+        Ok(entries)
+    }
+
+    /// The full text of `rev:path`, with no line limit.
+    ///
+    /// [`Self::head`] stops after a few lines because it only looks for a generated marker;
+    /// a static check needs the whole file to parse it. The blob is read from the commit, not
+    /// from the working tree, so uncommitted edits cannot change what a check sees.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError`] when git fails, the path is not a blob, or it is not UTF-8.
+    pub async fn blob_text(&self, rev: &str, path: &str) -> Result<String, GitError> {
+        let args = vec![
+            OsString::from("cat-file"),
+            OsString::from("blob"),
+            OsString::from(format!("{rev}:{path}")),
+        ];
+        self.run(GitCommand::CatFile, &args).await
+    }
+
     /// Asks `git check-attr` about `paths`, in one call per chunk of arguments.
     ///
     /// The attributes are read from the tree at `rev` (`--source`), so an uncommitted
@@ -384,6 +442,17 @@ impl GitRepo {
             .join("\n");
         Ok(head)
     }
+}
+
+/// One tree entry: a path, its blob SHA, and the size of that blob.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobEntry {
+    /// Repo-relative path.
+    pub path: String,
+    /// The blob's object name.
+    pub sha: String,
+    /// The blob's size in bytes.
+    pub size: u64,
 }
 
 /// How many paths one `check-attr` call may name, to stay clear of ARG_MAX.

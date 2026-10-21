@@ -24,7 +24,7 @@ pub mod log;
 pub mod show;
 
 pub use authored::{
-    AuthoredFile, AuthoredFilter, LISTED_LOCKFILES, LinguistAttrs, MAX_AUTHORED_LINE,
+    AuthoredFile, AuthoredFilter, BlobEntry, LISTED_LOCKFILES, LinguistAttrs, MAX_AUTHORED_LINE,
 };
 pub use blame::{BlameCoverage, BlameLine, BlameMap, BlameReport, blame_all};
 pub use bots::{is_bot, is_bot_commit};

@@ -2217,7 +2217,7 @@ Tick each task in the same commit that completes it.
 - [x] M1-T04 Registries and lockfiles
 - [x] M1-T05 H01–H10
 - [x] M1-T06 H11–H22, archetypes, thresholds
-- [ ] M1-T07 Static rule engine
+- [x] M1-T07 Static rule engine
 - [ ] M1-T08 S01–S12
 - [ ] M1-T09 D04, O01, O10, T04–T06, L05
 - [ ] M1-T10 P01–P07

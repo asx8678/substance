@@ -20,8 +20,8 @@ use crate::intake::Checkout;
 /// The literal hash a manifest carries for an input no task produces yet.
 ///
 /// A placeholder that is spelled out beats a plausible-looking fake hash: a reader can
-/// tell that `"none"` means "not computed". `thresholds_version` stopped using it in M1-T06;
-/// `rule_pack_hash` and `scoring_weights_version` follow when their tasks land.
+/// tell that `"none"` means "not computed". `thresholds_version` stopped using it in M1-T06
+/// and `rule_pack_hash` in M1-T07; `scoring_weights_version` follows when its task lands.
 pub const NO_HASH: &str = "none";
 
 /// The value `repetitions` takes: the plan's 3-of-3 rule.
@@ -44,6 +44,8 @@ pub struct ManifestInputs<'a> {
     pub tools: BTreeMap<String, ToolVersion>,
     /// The thresholds file's sha256, from the embedded `config/thresholds.toml`.
     pub thresholds_version: String,
+    /// The rule pack's sha256, from the embedded `rules/<lang>/*.yml`.
+    pub rule_pack_hash: String,
 }
 
 /// Builds the manifest, with `run_id` derived from everything else in it.
@@ -71,7 +73,7 @@ pub fn build(inputs: &ManifestInputs<'_>) -> Result<RunManifest, CanonicalJsonEr
         locale: "en-US".to_owned(),
         tools: inputs.tools.clone(),
         models: BTreeMap::new(),
-        rule_pack_hash: NO_HASH.to_owned(),
+        rule_pack_hash: inputs.rule_pack_hash.clone(),
         thresholds_version: inputs.thresholds_version.clone(),
         scoring_weights_version: NO_HASH.to_owned(),
         config_hash: inputs.config_hash.clone(),
