@@ -1,6 +1,6 @@
 # CI: the standard checks of docs/ACTION_PLAN.md §1 (M0-T09).
 # No test steps: tests are excluded by ADR-0008.
-# M1-T12 adds a `dogfood` job and M3 adds a `driver` job.
+# M1-T12 added the `dogfood` job and M3-T01 adds the `driver` job.
 name: ci
 
 # Quoted, so a YAML 1.1 parser (which reads a bare `on` as the boolean true)
@@ -81,6 +81,40 @@ jobs:
   # `--fail-on none` — because its purpose is to prove the pipeline runs end to end in CI, not
   # to gate a merge on substance's own numbers. A failing verdict here would be a finding about
   # the tool, which belongs in an issue rather than in a red build.
+  driver:
+    name: driver
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Pinned by commit: `git ls-remote https://github.com/actions/checkout refs/tags/v5.1.0`
+      # prints fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 (a lightweight tag, so no ^{} ref).
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # Pinned by commit: `git ls-remote https://github.com/actions/setup-node refs/tags/v6.0.0`
+      # prints 2028fbc5c25fe9cf00d9f06a71cc4710d4507903 (a lightweight tag).
+      # `driver/.nvmrc` is the version C-TS runs on, and the same file a developer's tools read.
+      - name: Node
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version-file: driver/.nvmrc
+          cache: npm
+          cache-dependency-path: driver/package-lock.json
+
+      # C-TS verbatim: `npm ci` needs the committed lockfile, and the two scripts are the
+      # checks. No browser is installed: the driver's own tests are excluded by ADR-0008, and
+      # typechecking the Playwright API needs types, not a Chromium binary.
+      - name: C-TS
+        run: |
+          npm --prefix driver ci
+          npm --prefix driver run typecheck
+          npm --prefix driver run lint
+
+      # The build is a separate acceptance item (M3-T01); it proves the emitted `dist` is
+      # loadable, which is what M3-T02 spawns.
+      - name: Build
+        run: npm --prefix driver run build
+
   dogfood:
     name: dogfood
     runs-on: ubuntu-latest

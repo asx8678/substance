@@ -340,6 +340,30 @@
       ],
       "type": "object"
     },
+    "SignalObservation": {
+      "additionalProperties": false,
+      "description": "One success or error signal the page showed.",
+      "properties": {
+        "kind": {
+          "description": "`success` or `error`.",
+          "type": "string"
+        },
+        "source": {
+          "description": "What produced it: `role=alert`, `aria-live=assertive`, `toast:sonner`, `config`.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The signal's visible text, normalized.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "text"
+      ],
+      "type": "object"
+    },
     "Storage": {
       "additionalProperties": false,
       "description": "Browser storage after the action.",
@@ -541,6 +565,13 @@
       "$ref": "#/$defs/Timestamp",
       "description": "When the action settled, on the frozen clock."
     },
+    "signals": {
+      "description": "Success and error signals the page showed, in discovery order.",
+      "items": {
+        "$ref": "#/$defs/SignalObservation"
+      },
+      "type": "array"
+    },
     "storage": {
       "$ref": "#/$defs/Storage",
       "description": "Browser storage after the action."
@@ -569,7 +600,8 @@
     "logs",
     "settled_at",
     "visible_text",
-    "axe_violations"
+    "axe_violations",
+    "signals"
   ],
   "title": "RecordPart",
   "type": "object"

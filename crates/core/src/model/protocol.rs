@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::clock::Timestamp;
+use crate::ids::BlobRef;
 use crate::model::Measured;
+use crate::model::app_model::Control;
 use crate::model::effect::{DbDelta, EgressEntry, EmailEntry, Logs, NetEntry, Storage, WsFrame};
 
 /// One command Rust sends the driver.
@@ -67,6 +69,8 @@ pub struct OpenContext {
     pub error_selectors: Vec<String>,
     /// Request patterns that belong to the idle baseline.
     pub idle_patterns: Vec<String>,
+    /// Toast containers from `rules/signals.toml`, with the attribute that names their kind.
+    pub toast_containers: Vec<ToastContainer>,
     /// The settle quiet period in milliseconds.
     pub settle_quiet_ms: u32,
     /// The settle cap in milliseconds.
@@ -185,8 +189,68 @@ pub enum DriverEvent {
     RecordPart(Box<RecordPart>),
     /// The driver reports a problem with the command.
     Error(DriverError),
+    /// What a command found, for the commands that return a result rather than a record part.
+    ///
+    /// A command that reports through `record_part` (an `act`, a `goto`) leaves this out. The
+    /// two are separate events because a result is not an effect: `list_controls` describes what
+    /// the page offers, and folding that into a record part would put a description of the page
+    /// into a record of what an action changed.
+    Result(DriverResult),
     /// The command finished.
     Done {},
+}
+
+/// What a command returns besides a record part.
+///
+/// Every variant carries the whole result: the driver never streams a partial answer, so a
+/// reader either gets a complete observation or an `error` event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DriverResult {
+    /// The interactive controls `list_controls` found, on the page it was asked about.
+    Controls {
+        /// The path the walk ran on, without query or fragment.
+        screen: String,
+        /// The controls, in document order.
+        controls: Vec<Control>,
+    },
+    /// The boxes `layout` measured.
+    Layout {
+        /// The path the measurement ran on, without query or fragment.
+        screen: String,
+        /// One box per element that was measured.
+        boxes: Vec<LayoutBox>,
+    },
+    /// The normalized DOM hash and the visible-text map `snapshot_dom` produced.
+    SnapshotDom {
+        /// The path the snapshot was taken on, without query or fragment.
+        screen: String,
+        /// The content hash of the normalized DOM.
+        dom_hash: String,
+        /// Visible text by element, for unused-field detection.
+        visible_text: BTreeMap<String, String>,
+    },
+    /// The axe-core violations `axe` found.
+    Axe {
+        /// The path axe ran on, without query or fragment.
+        screen: String,
+        /// One entry per violated rule, in the order axe reported them.
+        violations: Vec<AxeViolation>,
+    },
+    /// What a login changed, for the session the recorder will reuse.
+    Login {
+        /// Browser storage after the login, in the same shape a record part reports.
+        storage: crate::model::effect::Storage,
+        /// The keys that appeared or changed, sorted: `localStorage:token`, `cookie:sid`.
+        ///
+        /// Values are not included. This is the answer to "did logging in do anything", and the
+        /// answer does not need the secret that was just used to obtain it.
+        changed: Vec<String>,
+        /// Where the login request was sent, when the mode was `api`.
+        request_path: Option<String>,
+        /// The login request body, as a blob with the password replaced.
+        request_body: Option<BlobRef>,
+    },
 }
 
 /// A driver-side failure.
@@ -229,6 +293,8 @@ pub struct RecordPart {
     pub visible_text: BTreeMap<String, String>,
     /// Axe-core violations, when `axe` ran.
     pub axe_violations: Vec<AxeViolation>,
+    /// Success and error signals the page showed, in discovery order.
+    pub signals: Vec<SignalObservation>,
 }
 
 /// One axe-core violation.
@@ -241,6 +307,36 @@ pub struct AxeViolation {
     pub impact: Option<String>,
     /// How many nodes matched.
     pub nodes: u32,
+}
+
+/// A toast container, and how to tell a success toast from an error one.
+///
+/// The container selectors and the attribute values are data from `rules/signals.toml`, not
+/// code: a new toast library is a rule-pack change, and the driver never grows a list of
+/// English words that would silently stop matching when a library renames `success`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ToastContainer {
+    /// The container selector.
+    pub selector: String,
+    /// The attribute on the toast element whose value names the kind, for example `data-type`.
+    pub kind_attribute: String,
+    /// Values of that attribute that mean success.
+    pub success_values: Vec<String>,
+    /// Values of that attribute that mean error.
+    pub error_values: Vec<String>,
+}
+
+/// One success or error signal the page showed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SignalObservation {
+    /// `success` or `error`.
+    pub kind: String,
+    /// What produced it: `role=alert`, `aria-live=assertive`, `toast:sonner`, `config`.
+    pub source: String,
+    /// The signal's visible text, normalized.
+    pub text: String,
 }
 
 /// One element box, for layout checks.

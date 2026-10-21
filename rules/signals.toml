@@ -1,0 +1,42 @@
+# Toast containers, for the driver's signal rule (M3-T01).
+#
+# A signal is evidence that the app told the user something. `role=status`, `role=alert` and
+# `aria-live` are read from the DOM directly and need no rule. The libraries below render a
+# plain div with a type attribute, so the attribute is the only machine-readable statement the
+# page makes about whether the toast was good news. There are deliberately no English word
+# lists here: `success` and `succeeded` are not signals, they are spelling.
+#
+# The rule pack grows by adding a table. Nothing in the driver names a library.
+
+[[toast]]
+# sonner: <li data-sonner-toast data-type="success">, container is the fixed <ol>.
+name = "sonner"
+selector = "[data-sonner-toaster] [data-sonner-toast]"
+kind_attribute = "data-type"
+success_values = ["success"]
+error_values = ["error"]
+
+[[toast]]
+# react-toastify: .Toastify__toast--success / --error, container .Toastify__toast-container.
+name = "react-toastify"
+selector = ".Toastify__toast-container .Toastify__toast"
+kind_attribute = "class"
+success_values = ["Toastify__toast--success"]
+error_values = ["Toastify__toast--error"]
+
+[[toast]]
+# Radix Toast: data-state is "open"/"closed", so the kind comes from the root's data-* hint
+# that Radix consumers set; the type attribute is the documented escape hatch.
+name = "radix"
+selector = "[data-radix-toast-viewport] [data-radix-collection-item]"
+kind_attribute = "data-type"
+success_values = ["success"]
+error_values = ["error"]
+
+[[toast]]
+# Chakra UI: .chakra-alert with data-status="success" | "error".
+name = "chakra"
+selector = ".chakra-alert"
+kind_attribute = "data-status"
+success_values = ["success"]
+error_values = ["error"]

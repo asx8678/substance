@@ -14,8 +14,8 @@ use ts_rs::{Config, TS, TypeVisitor};
 use crate::config::ProjectConfig;
 use crate::hash::{CanonicalJsonError, canonical_json_pretty_value};
 use crate::model::{
-    AppModel, CheckVerdict, DriverCommand, DriverEvent, EffectRecord, Finding, RecordPart, Report,
-    RunManifest, seeding::Canaries,
+    AppModel, CheckVerdict, DriverCommand, DriverEvent, DriverResult, EffectRecord, Finding,
+    RecordPart, Report, RunManifest, SignalObservation, ToastContainer, seeding::Canaries,
 };
 
 /// Where the driver's generated types live, relative to the repository root.
@@ -76,6 +76,7 @@ pub enum SchemaKind {
     DriverCommand,
     /// One driver event.
     DriverEvent,
+    DriverResult,
     /// One record part.
     RecordPart,
     /// The canaries a run generated.
@@ -94,6 +95,7 @@ impl SchemaKind {
         Self::Config,
         Self::DriverCommand,
         Self::DriverEvent,
+        Self::DriverResult,
         Self::RecordPart,
         Self::Canaries,
     ];
@@ -111,6 +113,7 @@ impl SchemaKind {
             Self::Config => "config",
             Self::DriverCommand => "driver-command",
             Self::DriverEvent => "driver-event",
+            Self::DriverResult => "driver-result",
             Self::RecordPart => "record-part",
             Self::Canaries => "canaries",
         }
@@ -135,6 +138,7 @@ impl SchemaKind {
             Self::Config => generator.into_root_schema_for::<ProjectConfig>(),
             Self::DriverCommand => generator.into_root_schema_for::<DriverCommand>(),
             Self::DriverEvent => generator.into_root_schema_for::<DriverEvent>(),
+            Self::DriverResult => generator.into_root_schema_for::<DriverResult>(),
             Self::RecordPart => generator.into_root_schema_for::<RecordPart>(),
             Self::Canaries => generator.into_root_schema_for::<Canaries>(),
         };
@@ -171,14 +175,21 @@ pub fn json_schemas() -> Result<Vec<SchemaFile>, CanonicalJsonError> {
 /// Builds every TypeScript file for the committed types and their dependencies.
 ///
 /// The files are sorted by name. Files are generated with [`TYPESCRIPT_DIR`] as the base
-/// directory so that the relative imports in the output (`./Finding`) are the ones the
+/// directory so that the relative imports in the output (`./Finding.js`) are the ones the
 /// driver sees, whichever directory the CLI finally writes them into.
+///
+/// Imports carry a `.js` extension because the driver is an ES module and Node resolves
+/// specifiers literally: `./Finding` is an error there, whatever `tsc` would accept. ts-rs
+/// writes the extension but not the suffix, so the generated files also stay valid
+/// TypeScript for any tool that resolves them the way Node does.
 ///
 /// # Errors
 ///
 /// Returns [`TypeScriptError`] when a type cannot be exported.
 pub fn typescript_files() -> Result<Vec<TypeScriptFile>, TypeScriptError> {
-    let config = Config::new().with_out_dir(TYPESCRIPT_DIR);
+    let config = Config::new()
+        .with_out_dir(TYPESCRIPT_DIR)
+        .with_import_extension(Some("js"));
     let mut collector = Collector {
         config: &config,
         seen: BTreeSet::new(),
@@ -194,6 +205,9 @@ pub fn typescript_files() -> Result<Vec<TypeScriptFile>, TypeScriptError> {
     collector.visit::<ProjectConfig>();
     collector.visit::<DriverCommand>();
     collector.visit::<DriverEvent>();
+    collector.visit::<DriverResult>();
+    collector.visit::<SignalObservation>();
+    collector.visit::<ToastContainer>();
     collector.visit::<RecordPart>();
     collector.visit::<Canaries>();
     if let Some(error) = collector.error {

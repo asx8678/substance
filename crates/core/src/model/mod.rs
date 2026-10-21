@@ -33,7 +33,8 @@ pub use measured::Measured;
 pub use normalize::normalized_bytes;
 pub use protocol::{
     ActCommand, AxeViolation, ClickBurst, ClockCommand, DriverCommand, DriverError, DriverEvent,
-    LayoutBox, LoginCommand, NormalizePattern, OpenContext, RecordPart, RouteCommand, TraceCommand,
+    DriverResult, LayoutBox, LoginCommand, NormalizePattern, OpenContext, RecordPart, RouteCommand,
+    SignalObservation, ToastContainer, TraceCommand,
 };
 pub use report::{
     Archetype, Coverage, KnowledgeCutoff, Provenance, REPORT_SCHEMA_VERSION, Ratio, Report,

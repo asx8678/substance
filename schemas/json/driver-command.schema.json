@@ -18,6 +18,41 @@
         "replace"
       ],
       "type": "object"
+    },
+    "ToastContainer": {
+      "additionalProperties": false,
+      "description": "A toast container, and how to tell a success toast from an error one.\n\nThe container selectors and the attribute values are data from `rules/signals.toml`, not\ncode: a new toast library is a rule-pack change, and the driver never grows a list of\nEnglish words that would silently stop matching when a library renames `success`.",
+      "properties": {
+        "error_values": {
+          "description": "Values of that attribute that mean error.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind_attribute": {
+          "description": "The attribute on the toast element whose value names the kind, for example `data-type`.",
+          "type": "string"
+        },
+        "selector": {
+          "description": "The container selector.",
+          "type": "string"
+        },
+        "success_values": {
+          "description": "Values of that attribute that mean success.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "selector",
+        "kind_attribute",
+        "success_values",
+        "error_values"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -92,6 +127,13 @@
           },
           "type": "array"
         },
+        "toast_containers": {
+          "description": "Toast containers from `rules/signals.toml`, with the attribute that names their kind.",
+          "items": {
+            "$ref": "#/$defs/ToastContainer"
+          },
+          "type": "array"
+        },
         "tz": {
           "description": "The timezone, for example `\"UTC\"`.",
           "type": "string"
@@ -114,6 +156,7 @@
         "success_selectors",
         "error_selectors",
         "idle_patterns",
+        "toast_containers",
         "settle_quiet_ms",
         "settle_timeout_ms"
       ],

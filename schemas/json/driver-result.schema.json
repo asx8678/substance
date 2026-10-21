@@ -1,0 +1,427 @@
+{
+  "$defs": {
+    "AxeViolation": {
+      "additionalProperties": false,
+      "description": "One axe-core violation.",
+      "properties": {
+        "id": {
+          "description": "The rule ID.",
+          "type": "string"
+        },
+        "impact": {
+          "description": "The impact axe reported.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nodes": {
+          "description": "How many nodes matched.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "nodes"
+      ],
+      "type": "object"
+    },
+    "BlobRef": {
+      "description": "A content-addressed blob reference, written as `sha256:<hex>`.",
+      "type": "string"
+    },
+    "Control": {
+      "additionalProperties": false,
+      "description": "One interactive control, with its selector candidates in preference order.",
+      "properties": {
+        "form": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Form"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The form the control belongs to, when it is in one."
+        },
+        "name": {
+          "description": "The accessible name.",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/ControlPurpose",
+          "description": "`login`, `logout`, `submit` or `action`."
+        },
+        "role": {
+          "description": "The ARIA role.",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The route the control is on.",
+          "type": "string"
+        },
+        "selectors": {
+          "description": "Selector candidates: role plus name first, then test ID, then CSS.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "screen",
+        "role",
+        "name",
+        "selectors",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "ControlPurpose": {
+      "description": "What a control is for.",
+      "oneOf": [
+        {
+          "const": "login",
+          "description": "The login control.",
+          "type": "string"
+        },
+        {
+          "const": "logout",
+          "description": "The logout control.",
+          "type": "string"
+        },
+        {
+          "const": "submit",
+          "description": "A form submit control.",
+          "type": "string"
+        },
+        {
+          "const": "action",
+          "description": "Anything else.",
+          "type": "string"
+        }
+      ]
+    },
+    "Field": {
+      "additionalProperties": false,
+      "description": "One form field.",
+      "properties": {
+        "kind": {
+          "description": "`text`, `email`, `password`, `number`, `date`, `checkbox` or `select`.",
+          "type": "string"
+        },
+        "max": {
+          "description": "Maximum length or value, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "min": {
+          "description": "Minimum length or value, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "The field name.",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "The HTML `pattern`, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "description": "Whether the field is required.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "required"
+      ],
+      "type": "object"
+    },
+    "Form": {
+      "additionalProperties": false,
+      "description": "A form and its fields.",
+      "properties": {
+        "fields": {
+          "description": "Fields in document order.",
+          "items": {
+            "$ref": "#/$defs/Field"
+          },
+          "type": "array"
+        },
+        "selector": {
+          "description": "The form's selector.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selector",
+        "fields"
+      ],
+      "type": "object"
+    },
+    "LayoutBox": {
+      "additionalProperties": false,
+      "description": "One element box, for layout checks.",
+      "properties": {
+        "clickable": {
+          "description": "Whether the element is clickable.",
+          "type": "boolean"
+        },
+        "height": {
+          "description": "Height in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selector": {
+          "description": "The selector that found the element.",
+          "type": "string"
+        },
+        "width": {
+          "description": "Width in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "description": "Left edge in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "description": "Top edge in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "selector",
+        "x",
+        "y",
+        "width",
+        "height",
+        "clickable"
+      ],
+      "type": "object"
+    },
+    "Storage": {
+      "additionalProperties": false,
+      "description": "Browser storage after the action.",
+      "properties": {
+        "cookies": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Cookie names and values, sorted by name.",
+          "type": "object"
+        },
+        "indexeddb": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "IndexedDB entries, sorted by key.",
+          "type": "object"
+        },
+        "local": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "`localStorage` entries, sorted by key.",
+          "type": "object"
+        },
+        "session": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "`sessionStorage` entries, sorted by key.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "local",
+        "session",
+        "indexeddb",
+        "cookies"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What a command returns besides a record part.\n\nEvery variant carries the whole result: the driver never streams a partial answer, so a\nreader either gets a complete observation or an `error` event.",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "description": "The interactive controls `list_controls` found, on the page it was asked about.",
+      "properties": {
+        "controls": {
+          "description": "The controls, in document order.",
+          "items": {
+            "$ref": "#/$defs/Control"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "controls",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The path the walk ran on, without query or fragment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "screen",
+        "controls"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The boxes `layout` measured.",
+      "properties": {
+        "boxes": {
+          "description": "One box per element that was measured.",
+          "items": {
+            "$ref": "#/$defs/LayoutBox"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "layout",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The path the measurement ran on, without query or fragment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "screen",
+        "boxes"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The normalized DOM hash and the visible-text map `snapshot_dom` produced.",
+      "properties": {
+        "dom_hash": {
+          "description": "The content hash of the normalized DOM.",
+          "type": "string"
+        },
+        "kind": {
+          "const": "snapshot_dom",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The path the snapshot was taken on, without query or fragment.",
+          "type": "string"
+        },
+        "visible_text": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Visible text by element, for unused-field detection.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "screen",
+        "dom_hash",
+        "visible_text"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The axe-core violations `axe` found.",
+      "properties": {
+        "kind": {
+          "const": "axe",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The path axe ran on, without query or fragment.",
+          "type": "string"
+        },
+        "violations": {
+          "description": "One entry per violated rule, in the order axe reported them.",
+          "items": {
+            "$ref": "#/$defs/AxeViolation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "screen",
+        "violations"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "What a login changed, for the session the recorder will reuse.",
+      "properties": {
+        "changed": {
+          "description": "The keys that appeared or changed, sorted: `localStorage:token`, `cookie:sid`.\n\nValues are not included. This is the answer to \"did logging in do anything\", and the\nanswer does not need the secret that was just used to obtain it.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "login",
+          "type": "string"
+        },
+        "request_body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The login request body, as a blob with the password replaced."
+        },
+        "request_path": {
+          "description": "Where the login request was sent, when the mode was `api`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "storage": {
+          "$ref": "#/$defs/Storage",
+          "description": "Browser storage after the login, in the same shape a record part reports."
+        }
+      },
+      "required": [
+        "kind",
+        "storage",
+        "changed"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "DriverResult"
+}
