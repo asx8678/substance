@@ -119,6 +119,18 @@ network = true
 # (pypi.org/project/aislop, pypi.org/project/ai-slop-detector, docs.rs/antislop) but not
 # their version commands, so both the version argument and the pin stay unconfirmed
 # until M1-T08 sits down with their `--help` output.
+# M2-T01: `prlimit` wraps repo-controlled commands so a runaway build hits the kernel's limits
+# rather than the host's. It serves no check on its own, and running it executes nothing from the
+# repository, so it is neither a check tool nor exec_repo_code.
+[tools.prlimit]
+bin = "prlimit"
+version_args = ["--version"]
+min_version = "2.37.0"    # util-linux 2.37 is where `prlimit --version` prints a parseable line
+pin = "2.41.1"            # util-linux/util-linux refs/tags/v2.41.1
+checks = []
+exec_repo_code = false
+network = false
+
 [tools.aislop]
 bin = "aislop"
 version_args = ["--version"]

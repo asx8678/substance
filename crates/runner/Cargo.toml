@@ -4,12 +4,20 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 substance-core = { version = "0.0.0", path = "../core" }
 thiserror = "2.0.21"
-tokio = { version = "1.54.0", features = ["process", "time"] }
+# `io-util` for the stream pumps, `rt` for the spawned readers, and `macros` for the probe's
+# `#[tokio::main]`; the process supervisor needs all three.
+tokio = { version = "1.54.0", features = ["io-util", "macros", "process", "rt", "time"] }
 tracing = "0.1.44"
+
+# `killpg` and nothing else: `nix`'s `signal` feature is safe Rust over the POSIX call, so the
+# workspace's `unsafe_code = forbid` stays intact and no `pre_exec` is needed.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.3", features = ["signal"] }
 
 [lints]
 workspace = true
