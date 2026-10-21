@@ -1,0 +1,63 @@
+# Error lines in an application's server log (M3-T03). Data, not code.
+#
+# The server-log channel counts error lines, and "error" has to mean something the app actually
+# writes. Every rule here is structural -- a level field, a stack marker, a runtime's own
+# vocabulary -- and none is a search for an English word in a message, because a message saying
+# "error" in a 200 response body is not an error and a message saying "everything is fine" is not
+# a success.
+#
+# Each entry is matched case-sensitively against one log line. A line counts once, even when it
+# matches several rules: the channel reports "lines", not "matches".
+#
+# Three groups, because they mean different things to a reader:
+#   level      the app's logger said so
+#   stack      a stack trace or a crash, whatever the level
+#   unhandled  the runtime caught a promise nobody awaited
+
+[[rule]]
+name = "level-error"
+kind = "level"
+# A level field, JSON or key=value or a bracketed prefix: "level":"error", level=ERROR, [error].
+pattern = '(?i)"?level"?\s*[:=]\s*"?\s*(error|fatal|critical|crit)\b'
+# The bracketed form, e.g. "[ERROR] ..." or "ERROR ..." at the start of a line.
+alt = '(?i)^\s*\[?(error|fatal|critical|crit)\]?[\s:]'
+checks = ["B03", "B04", "B09", "B24"]
+
+[[rule]]
+name = "level-warn-counts-not"
+kind = "note"
+# Recorded as documentation of what is NOT counted: a warning is not an error. Kept as a rule with
+# no pattern so the decision is visible in the data file rather than in a comment in Rust.
+pattern = '(?i)"?level"?\s*[:=]\s*"?\s*(warn|warning)\b'
+counts = false
+
+[[rule]]
+name = "python-traceback"
+kind = "stack"
+pattern = '^Traceback \(most recent call last\):'
+checks = ["B03", "B24"]
+
+[[rule]]
+name = "rust-panic"
+kind = "stack"
+pattern = "panicked at "
+checks = ["B03", "B09"]
+
+[[rule]]
+name = "node-unhandled-rejection"
+kind = "unhandled"
+pattern = '(?i)unhandled(rejection|promise rejection)|UnhandledPromiseRejection'
+checks = ["B03"]
+
+[[rule]]
+name = "node-uncaught-exception"
+kind = "unhandled"
+pattern = '(?i)uncaughtException|uncaught exception'
+checks = ["B03"]
+
+[[rule]]
+name = "java-exception"
+kind = "stack"
+# A Java stack frame line, which only appears in a stack trace.
+pattern = '^\s+at [\w.$]+\([\w.$]+\.java:\d+\)'
+checks = ["B09"]

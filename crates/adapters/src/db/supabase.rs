@@ -23,14 +23,15 @@
 use async_trait::async_trait;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use substance_core::ids::{RunId, SnapshotId};
 use substance_core::model::{Capabilities, DbHandle, Measured, RedactedUrl, run_tag};
 use substance_core::tools::ToolSpec;
 use substance_runner::{Captured, ExecPermit, StoppedApp, run_tool_capture_any};
 
+use super::postgres::PostgresAdapter;
 use super::{CatalogSummary, DbAdapter, DbError, RowChange};
 
 /// The tool name, as `tools.toml` spells it.
@@ -58,6 +59,11 @@ pub struct SupabaseAdapter {
     url_env: String,
     /// Set once teardown has stopped the stack, so a second call is a no-op. Shared by clones.
     torn_down: Arc<AtomicBool>,
+    /// The stack's own Postgres URL, recorded by `start()`.
+    ///
+    /// The capture channels have no permit and must not run the CLI, so the URL is kept from the
+    /// one call that legitimately ran it. Holds the credentials, so it is never formatted.
+    url: Arc<Mutex<Option<String>>>,
 }
 
 impl Clone for SupabaseAdapter {
@@ -68,6 +74,7 @@ impl Clone for SupabaseAdapter {
             project_id: self.project_id.clone(),
             url_env: self.url_env.clone(),
             torn_down: Arc::clone(&self.torn_down),
+            url: Arc::clone(&self.url),
         }
     }
 }
@@ -84,6 +91,7 @@ impl SupabaseAdapter {
             project_id: format!("substance_{}", run_tag(run_id)),
             url_env,
             torn_down: Arc::new(AtomicBool::new(false)),
+            url: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -91,6 +99,31 @@ impl SupabaseAdapter {
     #[must_use]
     pub fn has_config(project: &Path) -> bool {
         project.join("supabase/config.toml").exists()
+    }
+
+    /// A Postgres adapter for the running stack's server.
+    ///
+    /// The URL is the one `start()` recorded from `supabase status -o json`: the capture channels
+    /// run with no permit, and re-running the CLI from a channel would be a stack operation at a
+    /// moment that has nothing to do with the stack. A stack that was never started is a missing
+    /// channel, and the reason says so.
+    fn postgres(&self) -> Result<PostgresAdapter, DbError> {
+        let Some(url) = self.url.lock().ok().and_then(|slot| slot.clone()) else {
+            return Err(DbError::Unavailable {
+                engine: self.engine().to_owned(),
+                reason: "the supabase stack has not been started, so there is no server to read"
+                    .to_owned(),
+            });
+        };
+        let adapter = PostgresAdapter::new(
+            &url,
+            &RunId::derive(&[self.project_id.as_bytes()]),
+            self.url_env.clone(),
+        )?;
+        // The stack's database exists and is already migrated, so the run's own database pair
+        // would be a detour: the adapter reads the database the app actually writes to, and names
+        // its replication slot after the run so two runs on one host do not share one.
+        Ok(adapter.use_existing_database("postgres".to_owned()))
     }
 
     /// Runs the CLI and returns its captured output whatever the exit code.
@@ -197,25 +230,26 @@ impl DbAdapter for SupabaseAdapter {
     }
 
     async fn begin_capture(&self) -> Result<(), DbError> {
-        Err(DbError::Unavailable {
-            engine: self.engine().to_owned(),
-            reason: "supabase row capture arrives in M3, over the local stack's Postgres"
-                .to_owned(),
-        })
+        // The stack *is* Postgres, so the channels are the Postgres adapter's: one implementation
+        // of the WAL parsing and the `dbid`-filtered delta, not a second that could disagree with
+        // it. What Supabase cannot do cheaply is reset (ADR-0018), which is a fact about resets,
+        // not about reading what an action wrote.
+        let adapter = self.postgres()?;
+        adapter.begin_capture().await
     }
 
     async fn end_capture(&self) -> Result<Vec<RowChange>, DbError> {
-        Err(DbError::Unavailable {
-            engine: self.engine().to_owned(),
-            reason: "supabase row capture arrives in M3, over the local stack's Postgres"
-                .to_owned(),
-        })
+        let adapter = self.postgres()?;
+        adapter.end_capture().await
     }
 
     async fn query_count(&self) -> Result<Measured<u64>, DbError> {
-        Ok(Measured::not_measured(
-            "supabase query counts read pg_stat_statements through the CLI, and arrive in M3",
-        ))
+        // A stack that is not running has no counts to report, and that is a missing channel
+        // rather than a failed run: the boot stage is what starts it.
+        match self.postgres() {
+            Ok(adapter) => adapter.query_count().await,
+            Err(error) => Ok(Measured::not_measured(error.to_string())),
+        }
     }
 
     async fn catalog(&self) -> Result<Measured<CatalogSummary>, DbError> {
@@ -287,6 +321,12 @@ impl SupabaseAdapter {
             });
         }
         let status = self.status(permit).await?;
+        // The capture channels read this server, and they have no permit to ask for it again.
+        if let Some(text) = status_url_text(&status.stdout)
+            && let Ok(mut slot) = self.url.lock()
+        {
+            *slot = Some(text);
+        }
         let server = status_url(&status.stdout)
             .unwrap_or_else(|| RedactedUrl::parse("postgres://127.0.0.1:54322"));
         Ok(DbHandle {
@@ -353,6 +393,22 @@ fn probe_binary(bin: &str) -> bool {
         let candidate = Path::new(dir).join(bin);
         candidate.is_file()
     })
+}
+
+/// The `DB URL` out of `supabase status -o json`, with its credentials.
+///
+/// Only the capture channels call this, and only to build a connection config: the value must not
+/// reach a message, a log or a record, which is why the redacted [`status_url`] is what the rest of
+/// this module uses.
+fn status_url_text(stdout: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(stdout).ok()?;
+    let object = value.as_object()?;
+    for key in ["DB_URL", "db_url", "DATABASE_URL"] {
+        if let Some(text) = object.get(key).and_then(serde_json::Value::as_str) {
+            return Some(text.to_owned());
+        }
+    }
+    None
 }
 
 /// The `DB URL` out of `supabase status -o json`, redacted.

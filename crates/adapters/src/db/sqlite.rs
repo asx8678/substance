@@ -21,6 +21,8 @@
 use async_trait::async_trait;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
 use substance_core::ids::SnapshotId;
 use substance_core::model::{Capabilities, DbHandle, Measured, RedactedUrl};
 use substance_runner::StoppedApp;
@@ -37,8 +39,78 @@ const PAGES_PER_STEP: i32 = 100;
 /// The suffix snapshot files carry inside the run directory.
 const SNAPSHOT_SUFFIX: &str = "snapshot";
 
+/// The prefix a capture's copies carry: `capture-before.db`, `capture-after.db`.
+const CAPTURE_PREFIX: &str = "capture-";
+
+/// How long one `sqldiff` may take.
+///
+/// It reads two database files; a small one diffs in milliseconds. The cap is a safety net for a
+/// pathologically large database, not a target.
+const SQ_DIFF_CAP: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Runs `sqldiff --changes before after` and parses the result.
+///
+/// `--changes` is the format this parses: one statement per changed row. Without it `sqldiff`
+/// prints whole INSERT statements describing the new state, which is not a diff of changes and
+/// would count every unchanged row of every changed table.
+///
+/// The spawn goes through the runner's helper rather than `std::process::Command`: the only place
+/// allowed to start a process is `crates/runner`, and its helper also enforces the timeout.
+async fn run_sqldiff(
+    program: &Path,
+    args: &[&std::ffi::OsStr],
+    adapter: &SqliteAdapter,
+) -> Result<Vec<RowChange>, DbError> {
+    // The working directory is the database's folder, not the file: a program cannot be spawned
+    // with a file as its cwd, and the paths passed as arguments are absolute anyway.
+    let directory = adapter.path.parent().unwrap_or(&adapter.path);
+    let captured = substance_runner::run_tool_capture_any(
+        &program.display().to_string(),
+        args,
+        directory,
+        SQ_DIFF_CAP,
+    )
+    .await
+    .map_err(|error| DbError::Tool {
+        tool: "sqldiff".to_owned(),
+        detail: error.to_string(),
+    })?;
+    if !captured.success {
+        return Err(DbError::Sqlite {
+            operation: "sqldiff".to_owned(),
+            path: adapter.path.clone(),
+            detail: captured.stderr_trimmed().to_owned(),
+        });
+    }
+    let diff = substance_recorder::sqldiff::parse(&captured.stdout);
+    // `sqldiff` reports the row's key expression rather than its contents, which is exactly what
+    // a record keeps: enough to say "this row", not enough to carry a secret off disk.
+    Ok(diff.changes)
+}
+
+/// Finds a program on `PATH`, the way a shell would.
+///
+/// `doctor` reports `sqldiff` from `PATH`, and this must agree with it: a channel that says the
+/// tool is missing while `doctor` says it is installed would send a reader to two different
+/// conclusions. A bare name is not spawnable without a lookup, and spawning a missing name would
+/// report the OS's error instead of "tool missing".
+fn which(name: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 /// A SQLite database inside the work copy.
-#[derive(Debug, Clone)]
+///
+/// Not `Clone`: a capture holds the "before" copy's path in a mutex, and cloning the adapter would
+/// give two handles that each believe they own one capture. One adapter per run is the shape the
+/// factory builds anyway.
+#[derive(Debug)]
 pub struct SqliteAdapter {
     /// The database file, absolute.
     path: PathBuf,
@@ -46,6 +118,15 @@ pub struct SqliteAdapter {
     snapshots: PathBuf,
     /// The environment variable the app reads its URL from.
     url_env: String,
+    /// Where the "before" copy lives while a capture runs.
+    capture: Mutex<Option<CaptureState>>,
+}
+
+/// The state of one capture window: the copy taken before the action.
+#[derive(Debug)]
+struct CaptureState {
+    /// The "before" database file.
+    before: PathBuf,
 }
 
 impl SqliteAdapter {
@@ -59,6 +140,7 @@ impl SqliteAdapter {
             path,
             snapshots,
             url_env,
+            capture: Mutex::new(None),
         }
     }
 
@@ -73,6 +155,34 @@ impl SqliteAdapter {
     pub fn snapshot_path(&self, id: &SnapshotId) -> PathBuf {
         self.snapshots
             .join(format!("{}.{SNAPSHOT_SUFFIX}", id.as_str()))
+    }
+
+    /// The path of a capture copy: `<run>/capture-<phase>.db`.
+    fn capture_path(&self, phase: &str) -> PathBuf {
+        self.snapshots
+            .parent()
+            .unwrap_or(&self.snapshots)
+            .join(format!("{CAPTURE_PREFIX}{phase}.db"))
+    }
+
+    /// Copies the database to `destination` with the online backup API.
+    fn backup_to(&self, destination: &Path) -> Result<(), DbError> {
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent).map_err(|source| DbError::Io {
+                operation: "create directory".to_owned(),
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        }
+        let _ = std::fs::remove_file(destination);
+        let source = self.open()?;
+        source
+            .backup(rusqlite::MAIN_DB, destination, None)
+            .map_err(|error| DbError::Sqlite {
+                operation: "capture backup".to_owned(),
+                path: self.path.clone(),
+                detail: error.to_string(),
+            })
     }
 
     /// Opens the database, mapping a failure to the adapter's error.
@@ -258,17 +368,49 @@ impl DbAdapter for SqliteAdapter {
     }
 
     async fn begin_capture(&self) -> Result<(), DbError> {
-        Err(DbError::Unavailable {
-            engine: self.engine().to_owned(),
-            reason: "sqlite row capture arrives in M3".to_owned(),
-        })
+        // The "before" copy of the online backup, next to the snapshots so it is cleaned up with
+        // the run. `sqldiff` needs two files; a copy taken through the backup API is consistent
+        // even while the app writes, which a plain file copy is not (see this module's header).
+        let before = self.capture_path("before");
+        self.backup_to(&before)?;
+        if let Ok(mut slot) = self.capture.lock() {
+            *slot = Some(CaptureState { before });
+        }
+        Ok(())
     }
 
     async fn end_capture(&self) -> Result<Vec<RowChange>, DbError> {
-        Err(DbError::Unavailable {
-            engine: self.engine().to_owned(),
-            reason: "sqlite row capture arrives in M3".to_owned(),
-        })
+        let Some(state) = self.capture.lock().ok().and_then(|mut slot| slot.take()) else {
+            return Err(DbError::Unavailable {
+                engine: self.engine().to_owned(),
+                reason: "capture was never started".to_owned(),
+            });
+        };
+        let after = self.capture_path("after");
+        self.backup_to(&after)?;
+
+        // `sqldiff` comes from PATH. Its absence is a missing channel, not a failed run: the app
+        // works without it, and the row channel simply says it could not be read.
+        let result = match which("sqldiff") {
+            None => Err(DbError::Unavailable {
+                engine: self.engine().to_owned(),
+                reason: "tool missing: sqldiff".to_owned(),
+            }),
+            Some(program) => {
+                let args = [
+                    std::ffi::OsString::from("--changes"),
+                    state.before.clone().into_os_string(),
+                    after.clone().into_os_string(),
+                ];
+                let args: Vec<&std::ffi::OsStr> =
+                    args.iter().map(std::ffi::OsString::as_os_str).collect();
+                run_sqldiff(&program, &args, self).await
+            }
+        };
+        // The copies are evidence only while this call runs; the record keeps the counts.
+        let _ = std::fs::remove_file(&state.before);
+        let _ = std::fs::remove_file(&after);
+        result
     }
 
     async fn query_count(&self) -> Result<Measured<u64>, DbError> {

@@ -32,6 +32,16 @@ checks = ["S11", "L05"]
 exec_repo_code = false
 network = false
 
+[tools.sqldiff]
+bin = "sqldiff"
+version_args = ["--version"]
+min_version = "3.45.0"   # the row-level diff output M3-T03 parses (--changes)
+pin = "3.53.4"           # sqlite/sqlite refs/tags/version-3.53.4 (git ls-remote, 2026-10-21)
+checks = ["B03", "B04", "B09"]
+# It reads two database files and writes a diff of their rows: no repository config is loaded.
+exec_repo_code = false
+network = false
+
 [tools.osv-scanner]
 bin = "osv-scanner"
 version_args = ["--version"]

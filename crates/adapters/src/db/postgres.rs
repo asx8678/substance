@@ -77,7 +77,12 @@ pub struct PostgresAdapter {
     /// The environment variable the app reads its URL from.
     url_env: String,
     /// What preflight found, so a channel's reason is decided once.
-    capabilities: Capabilities,
+    ///
+    /// Behind a mutex because `preflight` takes `&self` and the capture channels read it later:
+    /// without the store, `begin_capture` would consult the "preflight has not run yet" value that
+    /// every adapter starts with and report every row diff as unmeasured even on a server that
+    /// decodes perfectly.
+    capabilities: Mutex<Capabilities>,
     /// The snapshot databases this adapter made, so a guard can drop them too.
     ///
     /// A snapshot's database name is derived from its id, which the adapter sees when it makes it;
@@ -86,6 +91,21 @@ pub struct PostgresAdapter {
     snapshots: Mutex<Vec<String>>,
     /// Cleans up on drop unless teardown ran. Does nothing until `provision` arms it.
     guard: Mutex<Option<PgCleanupGuard>>,
+    /// `pg_stat_statements` as it stood when capture began.
+    ///
+    /// A field rather than a parameter because the trait's capture is two calls, and the baseline
+    /// has to survive between them. `None` before the first `begin_capture`, which is what makes
+    /// `query_count` outside a capture say so instead of reporting a number that means nothing.
+    query_baseline: Mutex<Option<QueryStatsSnapshot>>,
+}
+
+/// `sum(calls)` and the eviction counter, as one read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct QueryStatsSnapshot {
+    /// Total calls against the app's `dbid` at the moment of the read.
+    calls: u64,
+    /// `pg_stat_statements_info.dealloc`: how many entries have been evicted server-wide.
+    dealloc: u64,
 }
 
 impl PostgresAdapter {
@@ -129,12 +149,37 @@ impl PostgresAdapter {
             server: RedactedUrl::parse(url),
             base,
             url_env,
-            capabilities: unprobed_capabilities("preflight has not run yet"),
+            capabilities: Mutex::new(unprobed_capabilities("preflight has not run yet")),
             snapshots: Mutex::new(Vec::new()),
             // Armed by `provision`, not here: a guard that existed before the databases did would
             // have nothing to drop and would fire on an adapter that never created anything.
             guard: Mutex::new(None),
+            query_baseline: Mutex::new(None),
         })
+    }
+
+    /// The capabilities preflight found, or the "not run yet" placeholder.
+    ///
+    /// A clone rather than a guard: every caller reads two fields and drops it, and a caller that
+    /// held the mutex across an await would block `preflight` from storing its result.
+    #[must_use]
+    pub fn capabilities(&self) -> Capabilities {
+        self.capabilities
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|_| unprobed_capabilities("the capability store was poisoned"))
+    }
+
+    /// Points the adapter at a database that already exists, instead of the run's own pair.
+    ///
+    /// Supabase is the case this exists for: its stack creates and migrates one database, and a
+    /// second pair made by this adapter would be a database nothing else in the stack knows about.
+    /// The name becomes the app's database for every channel -- the WAL read, the `dbid` filter,
+    /// the slot -- so the adapter reports on what the app actually writes to.
+    #[must_use]
+    pub fn use_existing_database(mut self, name: String) -> Self {
+        self.base = name;
+        self
     }
 
     /// The app's database name: `substance_<12 chars>`.
@@ -330,6 +375,55 @@ impl PostgresAdapter {
         for message in messages {
             if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
                 return Ok(row.get(0).map(str::to_owned));
+            }
+        }
+        Ok(None)
+    }
+
+    /// `sum(calls)` for one database, plus the server's eviction counter.
+    ///
+    /// Filtered by `dbid` so another run's queries on the same server are not counted, and read
+    /// over the admin connection to `postgres`, which is not the app's database: substance's own
+    /// statements therefore never appear in the file being read.
+    ///
+    /// Returns `Ok(None)` when the view is not readable at all (the extension is installed in
+    /// another database), which a caller reports as `not_measured` rather than as zero.
+    async fn query_stats_snapshot(
+        client: &Client,
+        database: &str,
+    ) -> Result<Option<QueryStatsSnapshot>, DbError> {
+        let sql = format!(
+            "SELECT \
+                COALESCE((SELECT SUM(calls)::bigint FROM pg_stat_statements s \
+                  WHERE s.dbid = (SELECT oid FROM pg_database WHERE datname = '{database}')), 0), \
+                (SELECT dealloc FROM pg_stat_statements_info)"
+        );
+        let rows = client
+            .simple_query(&sql)
+            .await
+            .map_err(|error| DbError::Statement {
+                engine: "postgres".to_owned(),
+                operation: "read pg_stat_statements".to_owned(),
+                database: database.to_owned(),
+                detail: error.to_string(),
+            });
+        let rows = match rows {
+            Ok(rows) => rows,
+            // `query_stats` being preloaded does not mean the view exists in `postgres`. That is
+            // a missing channel, not a failed run.
+            Err(_) => return Ok(None),
+        };
+        for message in rows {
+            if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
+                let calls = row
+                    .get(0)
+                    .and_then(|text| text.parse::<u64>().ok())
+                    .unwrap_or(0);
+                let dealloc = row
+                    .get(1)
+                    .and_then(|text| text.parse::<u64>().ok())
+                    .unwrap_or(0);
+                return Ok(Some(QueryStatsSnapshot { calls, dealloc }));
             }
         }
         Ok(None)
@@ -636,13 +730,19 @@ impl DbAdapter for PostgresAdapter {
             );
         }
 
-        Ok(Capabilities {
+        let capabilities = Capabilities {
             engine: self.engine().to_owned(),
             logical_decoding: decoding,
             query_stats,
             createdb,
             problems,
-        })
+        };
+        // Stored before returning: the capture channels run after preflight and must see the same
+        // answer that the run recorded, not the placeholder the adapter was built with.
+        if let Ok(mut slot) = self.capabilities.lock() {
+            *slot = capabilities.clone();
+        }
+        Ok(capabilities)
     }
 
     async fn provision(&self) -> Result<DbHandle, DbError> {
@@ -769,31 +869,126 @@ impl DbAdapter for PostgresAdapter {
         )
         .await?;
         // 4. Recreate the slot, so M3's capture starts from the fresh database's position.
-        if let Some(plugin) = self.capabilities.logical_decoding.value().copied() {
+        if let Some(plugin) = self.capabilities().logical_decoding.value().copied() {
             Self::create_slot(&client, &slot, plugin).await?;
         }
         Ok(())
     }
 
     async fn begin_capture(&self) -> Result<(), DbError> {
-        Err(DbError::Unavailable {
-            engine: self.engine().to_owned(),
-            reason: "postgres row capture arrives in M3".to_owned(),
-        })
+        // The slot is created here rather than in `provision` because it is a per-capture
+        // resource: a slot created at provision time and never read would pin WAL for the whole
+        // run. It is dropped at teardown either way, and `Drop` drops it too.
+        let capabilities = self.capabilities();
+        let Some(plugin) = capabilities.logical_decoding.value().copied() else {
+            return Err(DbError::Unavailable {
+                engine: self.engine().to_owned(),
+                reason: capabilities
+                    .logical_decoding
+                    .reason()
+                    .unwrap_or("no logical decoding plugin")
+                    .to_owned(),
+            });
+        };
+        let client = self.connect().await?;
+        // A slot left by an earlier capture in the same run would start from the old position, so
+        // it is dropped first. Only this run's slot has this name.
+        let slot = self.slot();
+        let exists = Self::scalar(
+            &client,
+            "read replication slots",
+            &format!("SELECT slot_name FROM pg_replication_slots WHERE slot_name = '{slot}'"),
+        )
+        .await?;
+        if exists.is_some() {
+            let drop_sql = format!("SELECT pg_drop_replication_slot('{slot}')");
+            Self::execute(&client, "drop replication slot", &slot, &drop_sql).await?;
+        }
+        Self::create_slot(&client, &slot, plugin).await?;
+        // The query baseline is taken here, before the action, so the delta has something to be a
+        // delta from. It is a best-effort read: a server without pg_stat_statements must not make
+        // `begin_capture` fail, because the row channel is independent of the query channel.
+        if let Ok(Some(snapshot)) = Self::query_stats_snapshot(&client, &self.database()).await
+            && let Ok(mut baseline) = self.query_baseline.lock()
+        {
+            *baseline = Some(snapshot);
+        }
+        Ok(())
     }
 
     async fn end_capture(&self) -> Result<Vec<RowChange>, DbError> {
-        Err(DbError::Unavailable {
-            engine: self.engine().to_owned(),
-            reason: "postgres row capture arrives in M3".to_owned(),
-        })
+        let capabilities = self.capabilities();
+        let Some(plugin) = capabilities.logical_decoding.value().copied() else {
+            return Err(DbError::Unavailable {
+                engine: self.engine().to_owned(),
+                reason: capabilities
+                    .logical_decoding
+                    .reason()
+                    .unwrap_or("no logical decoding plugin")
+                    .to_owned(),
+            });
+        };
+        let client = self.connect().await?;
+        let slot = self.slot();
+        // `pg_logical_slot_get_changes` both reads and consumes: a second call returns nothing
+        // more, which is what makes one capture window one call.
+        let sql = format!("SELECT data FROM pg_logical_slot_get_changes('{slot}', NULL, NULL)");
+        let rows = client
+            .simple_query(&sql)
+            .await
+            .map_err(|error| DbError::Statement {
+                engine: self.engine().to_owned(),
+                operation: "read logical changes".to_owned(),
+                database: self.server.to_string(),
+                detail: error.to_string(),
+            })?;
+        let mut output = String::new();
+        for message in rows {
+            if let tokio_postgres::SimpleQueryMessage::Row(row) = message
+                && let Some(data) = row.get(0)
+            {
+                output.push_str(data);
+                output.push('\n');
+            }
+        }
+        let set = substance_recorder::changes::parse_capture(&output, plugin.as_str());
+        // Lines the parser did not understand are kept in the record rather than dropped: a plugin
+        // whose output changed shape would otherwise make a write look like no write.
+        Ok(set.changes)
     }
 
     async fn query_count(&self) -> Result<Measured<u64>, DbError> {
-        match self.capabilities.query_stats {
-            Measured::Measured { .. } => Ok(Measured::not_measured("query counting arrives in M3")),
-            Measured::NotMeasured { ref reason } => Ok(Measured::not_measured(reason.clone())),
+        let capabilities = self.capabilities();
+        if capabilities.query_stats.reason().is_some() {
+            return Ok(Measured::not_measured(
+                capabilities
+                    .query_stats
+                    .reason()
+                    .unwrap_or("pg_stat_statements is unavailable")
+                    .to_owned(),
+            ));
         }
+        let baseline = self.query_baseline.lock().ok().and_then(|guard| *guard);
+        let Some(baseline) = baseline else {
+            return Ok(Measured::not_measured(
+                "no query baseline: capture did not start",
+            ));
+        };
+        let client = self.connect().await?;
+        let Some(after) = Self::query_stats_snapshot(&client, &self.database()).await? else {
+            return Ok(Measured::not_measured(
+                "pg_stat_statements is not readable on this server",
+            ));
+        };
+        // Eviction check: entries removed between the two reads mean some statements were never
+        // counted, so the difference is a lower bound that cannot be reported as a count. This is
+        // the plan's §3 issue 38, and it is why no reset is ever sent: a reset is server-wide and
+        // would corrupt a run happening beside this one.
+        if after.dealloc != baseline.dealloc {
+            return Ok(Measured::not_measured("pg_stat_statements evicted"));
+        }
+        let delta = after.calls.saturating_sub(baseline.calls);
+        Ok(Measured::observed(delta))
     }
 
     async fn catalog(&self) -> Result<Measured<CatalogSummary>, DbError> {

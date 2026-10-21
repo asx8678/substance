@@ -242,19 +242,13 @@ pub trait DbAdapter: Send + Sync {
     }
 }
 
-/// One row that changed, as the capture channel will report it in M3.
+/// One row that changed, with its before and after images, as the capture channel reports it.
 ///
-/// Defined now so the trait is complete and M3 fills implementations rather than reshaping the
-/// API. There is deliberately no delta here: M3 decides whether a change is an insert, update or
-/// delete from the WAL record, and guessing the shape before then would fix an interface the
-/// implementer has not seen yet.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RowChange {
-    /// The table, schema-qualified when the engine reports a schema.
-    pub table: String,
-    /// The operation, as the plugin spelled it.
-    pub operation: String,
-}
+/// The recorder's type, re-exported rather than mirrored: the two engines parse their own output
+/// and both go through the recorder's parsers, so a second struct here would be a second place to
+/// forget a field when the format grows one -- which is exactly what happened once already, when
+/// the images were added to the recorder and a mirrored copy here would have silently dropped them.
+pub use substance_recorder::changes::RowChange;
 
 /// What the catalog channel reports in M9.
 #[derive(Debug, Clone, PartialEq, Eq)]

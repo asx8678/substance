@@ -2348,6 +2348,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "substance-core",
+ "substance-recorder",
  "substance-runner",
  "thiserror",
  "tokio",
@@ -2464,12 +2465,14 @@ dependencies = [
 name = "substance-recorder"
 version = "0.0.0"
 dependencies = [
+ "regex",
  "serde",
  "serde_json",
  "substance-core",
  "substance-runner",
  "thiserror",
  "tokio",
+ "toml 1.1.8+spec-1.1.0",
  "tracing",
 ]
 
