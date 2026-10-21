@@ -12,9 +12,9 @@ A run goes through stages:
 
 1. **Intake** resolves the repository and commit, pins the inputs (seed, clock, timezone, locale, tool versions, thresholds and rule hashes) and writes a run manifest. The run ID is derived from that manifest, so the same inputs give the same run.
 2. **Triage** reads git history, the code and the dependency lockfiles without executing anything from the repository: history signals (H01–H22) and an archetype such as "one-shot dump" or "solo maintained", static checks (S01–S12, D04, O01, O10, T04–T06, L05), dependency checks (P01–P07) and provenance (V01, V03, never scored).
-3. **Runtime** (only with `--allow-exec`) exports the commit to its own working copy, boots the app on the host through a boot ladder (README steps, then `substance.toml`, then detected commands), provisions a per-run database, seeds it, creates test accounts and snapshots the seeded state. Operability checks O01–O05 judge this stage.
+3. **Runtime** (only with `--allow-exec`) exports the commit to its own working copy, boots the app on the host through a boot ladder (`substance.toml` commands, else detected commands; the README steps are tried separately in their own copy and as a last resort), provisions a per-run database, seeds it, creates test accounts and snapshots the seeded state. Operability checks O01–O05 judge this stage.
 4. **Explore, probe and judge** drive the running app through a Playwright driver, record every effect (UI, network, storage, database rows, queries, logs, outbound traffic, email) as an effect record, and judge those records with pure oracles. This part is being built (see Status).
-5. **Report** writes `report.json`, a self-contained `report.html` and one file per finding.
+5. **Report** writes `report.json` and one file per finding, plus a self-contained `report.html` with `--format json,html`.
 
 Every check returns one of: `pass`, `fail`, `flaky`, `reported` (metrics only, no threshold yet), `not_measured` (with a reason, for example a missing tool or permission) or `unverifiable`. Something that was not measured is never shown as a pass.
 
@@ -28,7 +28,8 @@ Work follows `docs/ACTION_PLAN.md`; its section 9 tracks every task.
 | M1 Triage without running the app (50 checks, report v0) | done |
 | M2 Runner and boot (working copy, process supervisor, boot ladder, databases, seeding, O01–O05, `doctor`) | done |
 | M3 Recorder and driver (Playwright driver, driver host, recorder channels, egress proxy, Mailpit, normalization, clock, replay) | done |
-| M4–M11, M13 Crawler, behavioral checks, benchmark, API layer, resilience, front end, test truthfulness, Python and Rust packs, scoring, SARIF | not started |
+| M4 Crawler and first oracles | in progress (M4-T01 crawler done) |
+| M5–M11, M13 Benchmark, data and trust probes, API layer, resilience, front end, test truthfulness, Python and Rust packs, scoring, SARIF | not started |
 | M12 Agentic layer | deferred (ADR-0006) |
 
 `substance bench` and `substance report` are not implemented yet and say so when run.
@@ -86,16 +87,20 @@ The app's outbound traffic goes through a logging proxy that denies by default, 
 
 ## Development
 
-By owner decision (ADR-0008) the repository has no tests; invariants are compile-time assertions, guards and generated-schema checks. The CI gates are:
+By owner decision (ADR-0008) the repository has no tests; invariants are compile-time assertions, guards and generated-schema checks. The CI gates (see `.github/workflows/ci.yml`) are:
 
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo build --workspace --locked
+cargo clippy -p substance-agent --features agent --locked -- -D warnings
 scripts/guards.sh
+cargo run -q -p substance-cli -- schema export --out schemas
+git diff --exit-code -- schemas driver/src/generated
 npm --prefix driver ci
 npm --prefix driver run typecheck
 npm --prefix driver run lint
+npm --prefix driver run build
 ```
 
 ## License
