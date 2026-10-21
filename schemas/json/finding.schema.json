@@ -1,0 +1,1048 @@
+{
+  "$defs": {
+    "BlobRef": {
+      "description": "A content-addressed blob reference, written as `sha256:<hex>`.",
+      "type": "string"
+    },
+    "Cause": {
+      "additionalProperties": false,
+      "description": "A static explanation a finding points at.",
+      "properties": {
+        "check_id": {
+          "$ref": "#/$defs/CheckId",
+          "description": "The hint's check, for example an S check."
+        },
+        "finding_id": {
+          "$ref": "#/$defs/FindingId",
+          "description": "The hint's finding."
+        }
+      },
+      "required": [
+        "check_id",
+        "finding_id"
+      ],
+      "type": "object"
+    },
+    "CheckId": {
+      "description": "Every check in the catalog, in ID order.\n\nThe discriminants are positional, so `CheckId::B01 as usize == 0` and\n`id as usize` is the registry index.",
+      "oneOf": [
+        {
+          "const": "B01",
+          "description": "The `B01` check.",
+          "type": "string"
+        },
+        {
+          "const": "B02",
+          "description": "The `B02` check.",
+          "type": "string"
+        },
+        {
+          "const": "B03",
+          "description": "The `B03` check.",
+          "type": "string"
+        },
+        {
+          "const": "B04",
+          "description": "The `B04` check.",
+          "type": "string"
+        },
+        {
+          "const": "B05",
+          "description": "The `B05` check.",
+          "type": "string"
+        },
+        {
+          "const": "B06",
+          "description": "The `B06` check.",
+          "type": "string"
+        },
+        {
+          "const": "B07",
+          "description": "The `B07` check.",
+          "type": "string"
+        },
+        {
+          "const": "B08",
+          "description": "The `B08` check.",
+          "type": "string"
+        },
+        {
+          "const": "B09",
+          "description": "The `B09` check.",
+          "type": "string"
+        },
+        {
+          "const": "B10",
+          "description": "The `B10` check.",
+          "type": "string"
+        },
+        {
+          "const": "B11",
+          "description": "The `B11` check.",
+          "type": "string"
+        },
+        {
+          "const": "B12",
+          "description": "The `B12` check.",
+          "type": "string"
+        },
+        {
+          "const": "B13",
+          "description": "The `B13` check.",
+          "type": "string"
+        },
+        {
+          "const": "B14",
+          "description": "The `B14` check.",
+          "type": "string"
+        },
+        {
+          "const": "B15",
+          "description": "The `B15` check.",
+          "type": "string"
+        },
+        {
+          "const": "B16",
+          "description": "The `B16` check.",
+          "type": "string"
+        },
+        {
+          "const": "B17",
+          "description": "The `B17` check.",
+          "type": "string"
+        },
+        {
+          "const": "B18",
+          "description": "The `B18` check.",
+          "type": "string"
+        },
+        {
+          "const": "B19",
+          "description": "The `B19` check.",
+          "type": "string"
+        },
+        {
+          "const": "B20",
+          "description": "The `B20` check.",
+          "type": "string"
+        },
+        {
+          "const": "B21",
+          "description": "The `B21` check.",
+          "type": "string"
+        },
+        {
+          "const": "B22",
+          "description": "The `B22` check.",
+          "type": "string"
+        },
+        {
+          "const": "B23",
+          "description": "The `B23` check.",
+          "type": "string"
+        },
+        {
+          "const": "B24",
+          "description": "The `B24` check.",
+          "type": "string"
+        },
+        {
+          "const": "B25",
+          "description": "The `B25` check.",
+          "type": "string"
+        },
+        {
+          "const": "B26",
+          "description": "The `B26` check.",
+          "type": "string"
+        },
+        {
+          "const": "B27",
+          "description": "The `B27` check.",
+          "type": "string"
+        },
+        {
+          "const": "B28",
+          "description": "The `B28` check.",
+          "type": "string"
+        },
+        {
+          "const": "B29",
+          "description": "The `B29` check.",
+          "type": "string"
+        },
+        {
+          "const": "B30",
+          "description": "The `B30` check.",
+          "type": "string"
+        },
+        {
+          "const": "B31",
+          "description": "The `B31` check.",
+          "type": "string"
+        },
+        {
+          "const": "B32",
+          "description": "The `B32` check.",
+          "type": "string"
+        },
+        {
+          "const": "B33",
+          "description": "The `B33` check.",
+          "type": "string"
+        },
+        {
+          "const": "I01",
+          "description": "The `I01` check.",
+          "type": "string"
+        },
+        {
+          "const": "I02",
+          "description": "The `I02` check.",
+          "type": "string"
+        },
+        {
+          "const": "I03",
+          "description": "The `I03` check.",
+          "type": "string"
+        },
+        {
+          "const": "I04",
+          "description": "The `I04` check.",
+          "type": "string"
+        },
+        {
+          "const": "D01",
+          "description": "The `D01` check.",
+          "type": "string"
+        },
+        {
+          "const": "D02",
+          "description": "The `D02` check.",
+          "type": "string"
+        },
+        {
+          "const": "D03",
+          "description": "The `D03` check.",
+          "type": "string"
+        },
+        {
+          "const": "D04",
+          "description": "The `D04` check.",
+          "type": "string"
+        },
+        {
+          "const": "O01",
+          "description": "The `O01` check.",
+          "type": "string"
+        },
+        {
+          "const": "O02",
+          "description": "The `O02` check.",
+          "type": "string"
+        },
+        {
+          "const": "O03",
+          "description": "The `O03` check.",
+          "type": "string"
+        },
+        {
+          "const": "O04",
+          "description": "The `O04` check.",
+          "type": "string"
+        },
+        {
+          "const": "O05",
+          "description": "The `O05` check.",
+          "type": "string"
+        },
+        {
+          "const": "O06",
+          "description": "The `O06` check.",
+          "type": "string"
+        },
+        {
+          "const": "O07",
+          "description": "The `O07` check.",
+          "type": "string"
+        },
+        {
+          "const": "O08",
+          "description": "The `O08` check.",
+          "type": "string"
+        },
+        {
+          "const": "O09",
+          "description": "The `O09` check.",
+          "type": "string"
+        },
+        {
+          "const": "O10",
+          "description": "The `O10` check.",
+          "type": "string"
+        },
+        {
+          "const": "O11",
+          "description": "The `O11` check.",
+          "type": "string"
+        },
+        {
+          "const": "L01",
+          "description": "The `L01` check.",
+          "type": "string"
+        },
+        {
+          "const": "L02",
+          "description": "The `L02` check.",
+          "type": "string"
+        },
+        {
+          "const": "L03",
+          "description": "The `L03` check.",
+          "type": "string"
+        },
+        {
+          "const": "L04",
+          "description": "The `L04` check.",
+          "type": "string"
+        },
+        {
+          "const": "L05",
+          "description": "The `L05` check.",
+          "type": "string"
+        },
+        {
+          "const": "S01",
+          "description": "The `S01` check.",
+          "type": "string"
+        },
+        {
+          "const": "S02",
+          "description": "The `S02` check.",
+          "type": "string"
+        },
+        {
+          "const": "S03",
+          "description": "The `S03` check.",
+          "type": "string"
+        },
+        {
+          "const": "S04",
+          "description": "The `S04` check.",
+          "type": "string"
+        },
+        {
+          "const": "S05",
+          "description": "The `S05` check.",
+          "type": "string"
+        },
+        {
+          "const": "S06",
+          "description": "The `S06` check.",
+          "type": "string"
+        },
+        {
+          "const": "S07",
+          "description": "The `S07` check.",
+          "type": "string"
+        },
+        {
+          "const": "S08",
+          "description": "The `S08` check.",
+          "type": "string"
+        },
+        {
+          "const": "S09",
+          "description": "The `S09` check.",
+          "type": "string"
+        },
+        {
+          "const": "S10",
+          "description": "The `S10` check.",
+          "type": "string"
+        },
+        {
+          "const": "S11",
+          "description": "The `S11` check.",
+          "type": "string"
+        },
+        {
+          "const": "S12",
+          "description": "The `S12` check.",
+          "type": "string"
+        },
+        {
+          "const": "T01",
+          "description": "The `T01` check.",
+          "type": "string"
+        },
+        {
+          "const": "T02",
+          "description": "The `T02` check.",
+          "type": "string"
+        },
+        {
+          "const": "T03",
+          "description": "The `T03` check.",
+          "type": "string"
+        },
+        {
+          "const": "T04",
+          "description": "The `T04` check.",
+          "type": "string"
+        },
+        {
+          "const": "T05",
+          "description": "The `T05` check.",
+          "type": "string"
+        },
+        {
+          "const": "T06",
+          "description": "The `T06` check.",
+          "type": "string"
+        },
+        {
+          "const": "P01",
+          "description": "The `P01` check.",
+          "type": "string"
+        },
+        {
+          "const": "P02",
+          "description": "The `P02` check.",
+          "type": "string"
+        },
+        {
+          "const": "P03",
+          "description": "The `P03` check.",
+          "type": "string"
+        },
+        {
+          "const": "P04",
+          "description": "The `P04` check.",
+          "type": "string"
+        },
+        {
+          "const": "P05",
+          "description": "The `P05` check.",
+          "type": "string"
+        },
+        {
+          "const": "P06",
+          "description": "The `P06` check.",
+          "type": "string"
+        },
+        {
+          "const": "P07",
+          "description": "The `P07` check.",
+          "type": "string"
+        },
+        {
+          "const": "H01",
+          "description": "The `H01` check.",
+          "type": "string"
+        },
+        {
+          "const": "H02",
+          "description": "The `H02` check.",
+          "type": "string"
+        },
+        {
+          "const": "H03",
+          "description": "The `H03` check.",
+          "type": "string"
+        },
+        {
+          "const": "H04",
+          "description": "The `H04` check.",
+          "type": "string"
+        },
+        {
+          "const": "H05",
+          "description": "The `H05` check.",
+          "type": "string"
+        },
+        {
+          "const": "H06",
+          "description": "The `H06` check.",
+          "type": "string"
+        },
+        {
+          "const": "H07",
+          "description": "The `H07` check.",
+          "type": "string"
+        },
+        {
+          "const": "H08",
+          "description": "The `H08` check.",
+          "type": "string"
+        },
+        {
+          "const": "H09",
+          "description": "The `H09` check.",
+          "type": "string"
+        },
+        {
+          "const": "H10",
+          "description": "The `H10` check.",
+          "type": "string"
+        },
+        {
+          "const": "H11",
+          "description": "The `H11` check.",
+          "type": "string"
+        },
+        {
+          "const": "H12",
+          "description": "The `H12` check.",
+          "type": "string"
+        },
+        {
+          "const": "H13",
+          "description": "The `H13` check.",
+          "type": "string"
+        },
+        {
+          "const": "H14",
+          "description": "The `H14` check.",
+          "type": "string"
+        },
+        {
+          "const": "H15",
+          "description": "The `H15` check.",
+          "type": "string"
+        },
+        {
+          "const": "H16",
+          "description": "The `H16` check.",
+          "type": "string"
+        },
+        {
+          "const": "H17",
+          "description": "The `H17` check.",
+          "type": "string"
+        },
+        {
+          "const": "H18",
+          "description": "The `H18` check.",
+          "type": "string"
+        },
+        {
+          "const": "H19",
+          "description": "The `H19` check.",
+          "type": "string"
+        },
+        {
+          "const": "H20",
+          "description": "The `H20` check.",
+          "type": "string"
+        },
+        {
+          "const": "H21",
+          "description": "The `H21` check.",
+          "type": "string"
+        },
+        {
+          "const": "H22",
+          "description": "The `H22` check.",
+          "type": "string"
+        },
+        {
+          "const": "V01",
+          "description": "The `V01` check.",
+          "type": "string"
+        },
+        {
+          "const": "V02",
+          "description": "The `V02` check.",
+          "type": "string"
+        },
+        {
+          "const": "V03",
+          "description": "The `V03` check.",
+          "type": "string"
+        },
+        {
+          "const": "A01",
+          "description": "The `A01` check.",
+          "type": "string"
+        },
+        {
+          "const": "A02",
+          "description": "The `A02` check.",
+          "type": "string"
+        },
+        {
+          "const": "A03",
+          "description": "The `A03` check.",
+          "type": "string"
+        },
+        {
+          "const": "A04",
+          "description": "The `A04` check.",
+          "type": "string"
+        },
+        {
+          "const": "A05",
+          "description": "The `A05` check.",
+          "type": "string"
+        },
+        {
+          "const": "G01",
+          "description": "The `G01` check.",
+          "type": "string"
+        },
+        {
+          "const": "G02",
+          "description": "The `G02` check.",
+          "type": "string"
+        }
+      ]
+    },
+    "Confidence": {
+      "description": "How much a finding can be trusted.",
+      "oneOf": [
+        {
+          "const": "confirmed",
+          "description": "Confirmed by behavior.",
+          "type": "string"
+        },
+        {
+          "const": "flaky",
+          "description": "Seen inconsistently, set by the 3-of-3 rule at runtime.",
+          "type": "string"
+        },
+        {
+          "const": "hint",
+          "description": "A static hint that explains rather than decides.",
+          "type": "string"
+        }
+      ]
+    },
+    "Evidence": {
+      "description": "One reproducible artifact (principle 6).",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "An effect record.",
+          "properties": {
+            "record": {
+              "$ref": "#/$defs/RecordId"
+            }
+          },
+          "required": [
+            "record"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A content-addressed blob: a trace, a DOM dump, a screenshot.",
+          "properties": {
+            "blob": {
+              "$ref": "#/$defs/BlobRef"
+            }
+          },
+          "required": [
+            "blob"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A commit SHA.",
+          "properties": {
+            "commit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "commit"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A line range in a file.",
+          "properties": {
+            "file_range": {
+              "$ref": "#/$defs/FileRange"
+            }
+          },
+          "required": [
+            "file_range"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An object on the forge: an issue, a pull request or a release.",
+          "properties": {
+            "forge_object": {
+              "$ref": "#/$defs/ForgeObject"
+            }
+          },
+          "required": [
+            "forge_object"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An object in a package registry.",
+          "properties": {
+            "registry_object": {
+              "$ref": "#/$defs/RegistryObject"
+            }
+          },
+          "required": [
+            "registry_object"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A tool's own output, as a blob.",
+          "properties": {
+            "tool_output": {
+              "$ref": "#/$defs/ToolOutput"
+            }
+          },
+          "required": [
+            "tool_output"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A sentence of explanation that stands alone.",
+          "properties": {
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FileRange": {
+      "additionalProperties": false,
+      "description": "A line range in a file.",
+      "properties": {
+        "end_line": {
+          "description": "Last line, 1-based and inclusive.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Repo-relative path.",
+          "type": "string"
+        },
+        "start_line": {
+          "description": "First line, 1-based.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "type": "object"
+    },
+    "FindingId": {
+      "description": "A finding identifier: `fnd_<26 base32 chars>`.\n\nHashed from (run_id, check ID, target, sub-check).",
+      "type": "string"
+    },
+    "ForgeObject": {
+      "additionalProperties": false,
+      "description": "An issue, pull request or release.",
+      "properties": {
+        "id": {
+          "description": "The forge's identifier.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`issue`, `pull_request` or `release`.",
+          "type": "string"
+        },
+        "url": {
+          "description": "The URL.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "url"
+      ],
+      "type": "object"
+    },
+    "RecordId": {
+      "description": "An effect-record identifier: `rec_<26 base32 chars>`.\n\nHashed from (run_id, check ID, target, step index, repetition).",
+      "type": "string"
+    },
+    "RegistryObject": {
+      "additionalProperties": false,
+      "description": "A package-registry object.",
+      "properties": {
+        "package": {
+          "description": "The package name.",
+          "type": "string"
+        },
+        "registry": {
+          "description": "`npm`, `pypi` or `crates`.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version or range.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "registry",
+        "package",
+        "version"
+      ],
+      "type": "object"
+    },
+    "Severity": {
+      "description": "How bad a failure is. Fixed per check, uncalibrated (ADR-0010).",
+      "oneOf": [
+        {
+          "const": "critical",
+          "description": "Critical: a hard gate or a severe trust failure.",
+          "type": "string"
+        },
+        {
+          "const": "high",
+          "description": "High.",
+          "type": "string"
+        },
+        {
+          "const": "medium",
+          "description": "Medium.",
+          "type": "string"
+        },
+        {
+          "const": "low",
+          "description": "Low.",
+          "type": "string"
+        },
+        {
+          "const": "info",
+          "description": "Informational.",
+          "type": "string"
+        }
+      ]
+    },
+    "Target": {
+      "description": "What a check or a record is about.\n\nSerialized in serde's external form: `\"repo\"` or `{\"file\": \"src/main.rs\"}`.",
+      "oneOf": [
+        {
+          "const": "repo",
+          "description": "The repository as a whole.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One file, by repo-relative path.",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One route template, for example `\"/invoices/:id\"`.",
+          "properties": {
+            "route": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "route"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One screen reached by the crawl.",
+          "properties": {
+            "screen": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "screen"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One control, by role and accessible name.",
+          "properties": {
+            "control": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "control"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One API endpoint, by method and path template.",
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "endpoint"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One database table.",
+          "properties": {
+            "table": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "table"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One dependency.",
+          "properties": {
+            "dependency": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "dependency"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ToolOutput": {
+      "additionalProperties": false,
+      "description": "A tool's output, kept as a blob plus the command that produced it.",
+      "properties": {
+        "blob": {
+          "$ref": "#/$defs/BlobRef",
+          "description": "The captured output."
+        },
+        "command": {
+          "description": "The exact command line.",
+          "type": "string"
+        },
+        "tool": {
+          "description": "The tool, as named in `tools.toml`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "command",
+        "blob"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One reproducible reason the app failed a check.",
+  "properties": {
+    "cause": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Cause"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The static explanation, when one exists."
+    },
+    "check_id": {
+      "$ref": "#/$defs/CheckId",
+      "description": "The check that produced the finding."
+    },
+    "confidence": {
+      "$ref": "#/$defs/Confidence",
+      "description": "How much the finding can be trusted."
+    },
+    "evidence": {
+      "description": "Reproducible artifacts behind it, sorted by kind and reference.",
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "type": "array"
+    },
+    "id": {
+      "$ref": "#/$defs/FindingId",
+      "description": "Content-derived finding ID."
+    },
+    "related": {
+      "description": "Findings that describe the same defect, sorted by ID.",
+      "items": {
+        "$ref": "#/$defs/FindingId"
+      },
+      "type": "array"
+    },
+    "replay": {
+      "description": "The CLI command that replays it, for example `substance replay fnd_…`.",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity",
+      "description": "How bad the finding is."
+    },
+    "sub_check": {
+      "description": "The sub-check, when the check has named parts.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "target": {
+      "$ref": "#/$defs/Target",
+      "description": "What the finding is about."
+    },
+    "title": {
+      "description": "One-line summary.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "check_id",
+    "severity",
+    "confidence",
+    "title",
+    "target",
+    "evidence",
+    "replay",
+    "related"
+  ],
+  "title": "Finding",
+  "type": "object"
+}

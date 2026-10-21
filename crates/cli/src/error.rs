@@ -3,7 +3,7 @@
 //! | code | meaning |
 //! | --- | --- |
 //! | 0 | the command did what it was asked |
-//! | 1 | the `--fail-on` threshold was hit (M0-T08, when runs exist) |
+//! | 1 | the document is invalid, or the `--fail-on` threshold was hit |
 //! | 2 | a usage, config or intake error (clap reports these itself) |
 //! | 3 | an internal error, including a stage this build does not have |
 //!
@@ -13,6 +13,10 @@ use std::process::ExitCode;
 
 /// Exit code: the command did what it was asked.
 pub const EXIT_OK: u8 = 0;
+/// Exit code: the input is well-formed but invalid, or the threshold was hit.
+pub const EXIT_FAILURE: u8 = 1;
+/// Exit code: a usage, config or intake error.
+pub const EXIT_USAGE: u8 = 2;
 /// Exit code: an internal error, or a stage that is not built yet.
 pub const EXIT_INTERNAL: u8 = 3;
 
@@ -21,6 +25,8 @@ pub const EXIT_INTERNAL: u8 = 3;
 pub enum CliError {
     /// The caller asked for a stage this build does not have yet.
     NotImplemented(&'static str),
+    /// The command line, the config or the input cannot be used.
+    Usage(String),
     /// Something inside substance failed.
     Internal(String),
     /// Whoever was reading our output went away; that is not our failure.
@@ -46,6 +52,7 @@ impl CliError {
     pub fn exit_code(&self) -> u8 {
         match self {
             Self::NotImplemented(_) | Self::Internal(_) => EXIT_INTERNAL,
+            Self::Usage(_) => EXIT_USAGE,
             Self::BrokenPipe => EXIT_OK,
         }
     }
@@ -55,7 +62,7 @@ impl CliError {
     pub fn message(&self) -> String {
         match self {
             Self::NotImplemented(milestone) => format!("not implemented yet ({milestone})"),
-            Self::Internal(text) => text.clone(),
+            Self::Usage(text) | Self::Internal(text) => text.clone(),
             Self::BrokenPipe => String::new(),
         }
     }

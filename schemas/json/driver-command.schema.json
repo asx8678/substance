@@ -1,0 +1,421 @@
+{
+  "$defs": {
+    "NormalizePattern": {
+      "additionalProperties": false,
+      "description": "One normalization rule.",
+      "properties": {
+        "regex": {
+          "description": "The pattern to replace.",
+          "type": "string"
+        },
+        "replace": {
+          "description": "What to replace it with.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "regex",
+        "replace"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One command Rust sends the driver.",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "description": "Open a new isolated browser context.",
+      "properties": {
+        "blob_dir": {
+          "description": "Where bodies are written, as `sha256/<2>/<64>`.",
+          "type": "string"
+        },
+        "cmd": {
+          "const": "open_context",
+          "type": "string"
+        },
+        "error_selectors": {
+          "description": "Extra error selectors from `[signals]`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "height": {
+          "description": "Viewport height in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "idle_patterns": {
+          "description": "Request patterns that belong to the idle baseline.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "locale": {
+          "description": "The locale, for example `\"en-US\"`.",
+          "type": "string"
+        },
+        "normalize": {
+          "description": "The normalization rules, as regex and replacement pairs.",
+          "items": {
+            "$ref": "#/$defs/NormalizePattern"
+          },
+          "type": "array"
+        },
+        "settle_quiet_ms": {
+          "description": "The settle quiet period in milliseconds.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_timeout_ms": {
+          "description": "The settle cap in milliseconds.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "storage_state": {
+          "description": "A saved storage state to restore, when a session already exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success_selectors": {
+          "description": "Extra success selectors from `[signals]`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tz": {
+          "description": "The timezone, for example `\"UTC\"`.",
+          "type": "string"
+        },
+        "width": {
+          "description": "Viewport width in CSS pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cmd",
+        "width",
+        "height",
+        "locale",
+        "tz",
+        "normalize",
+        "blob_dir",
+        "success_selectors",
+        "error_selectors",
+        "idle_patterns",
+        "settle_quiet_ms",
+        "settle_timeout_ms"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Navigate, then settle.",
+      "properties": {
+        "cmd": {
+          "const": "goto",
+          "type": "string"
+        },
+        "url": {
+          "description": "The URL to load.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd",
+        "url"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Walk the accessibility tree for roles, names and selector candidates.",
+      "properties": {
+        "cmd": {
+          "const": "list_controls",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Run one action, then settle.",
+      "properties": {
+        "cmd": {
+          "const": "act",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`click`, `fill`, `select`, `press` or `submit`.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The selector to address.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value for `fill`, `select` and `press`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "cmd",
+        "kind",
+        "target"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Fail or delay matching requests inside the browser.",
+      "properties": {
+        "cmd": {
+          "const": "route",
+          "type": "string"
+        },
+        "mode": {
+          "description": "`fail_500`, `abort` or `delay`.",
+          "type": "string"
+        },
+        "ms": {
+          "description": "The delay in milliseconds, for `delay`.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pattern": {
+          "description": "The URL pattern.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd",
+        "pattern",
+        "mode"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Set or advance the browser clock.",
+      "properties": {
+        "cmd": {
+          "const": "clock",
+          "type": "string"
+        },
+        "op": {
+          "description": "`install` or `fast_forward`.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The instant or the amount to advance by.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd",
+        "op",
+        "value"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Hash the normalized DOM and capture the visible-text map.",
+      "properties": {
+        "cmd": {
+          "const": "snapshot_dom",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Run axe-core on the page.",
+      "properties": {
+        "cmd": {
+          "const": "axe",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Measure element boxes for overflow, overlap and tap-target checks.",
+      "properties": {
+        "cmd": {
+          "const": "layout",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Start or stop a Playwright trace.",
+      "properties": {
+        "cmd": {
+          "const": "trace",
+          "type": "string"
+        },
+        "op": {
+          "description": "`start` or `stop`.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Where the trace is written.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd",
+        "op",
+        "path"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Log in through the UI or the API.",
+      "oneOf": [
+        {
+          "description": "Fill and submit the login form.",
+          "properties": {
+            "email": {
+              "description": "The identifier value.",
+              "type": "string"
+            },
+            "identifier": {
+              "description": "The identifier field's selector.",
+              "type": "string"
+            },
+            "mode": {
+              "const": "ui",
+              "type": "string"
+            },
+            "password": {
+              "description": "The password field's selector.",
+              "type": "string"
+            },
+            "password_value": {
+              "description": "The password value; never echoed in events or logs.",
+              "type": "string"
+            },
+            "path": {
+              "description": "The login route.",
+              "type": "string"
+            },
+            "submit": {
+              "description": "The submit control's selector.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "path",
+            "identifier",
+            "password",
+            "submit",
+            "email",
+            "password_value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Send the login request through the page's request context.",
+          "properties": {
+            "body": {
+              "description": "The body, with `{email}` and `{password}` placeholders.",
+              "type": "string"
+            },
+            "email": {
+              "description": "The identifier value.",
+              "type": "string"
+            },
+            "method": {
+              "description": "The HTTP method.",
+              "type": "string"
+            },
+            "mode": {
+              "const": "api",
+              "type": "string"
+            },
+            "password_value": {
+              "description": "The password value; never echoed in events or logs.",
+              "type": "string"
+            },
+            "path": {
+              "description": "The path.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "method",
+            "path",
+            "body",
+            "email",
+            "password_value"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "cmd": {
+          "const": "login",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Dispose of the context.",
+      "properties": {
+        "cmd": {
+          "const": "close_context",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "DriverCommand"
+}

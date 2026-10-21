@@ -11,6 +11,7 @@ pub mod hash;
 pub mod ids;
 pub mod model;
 pub mod registry;
+pub mod schema_export;
 
 pub use check::{
     Axis, CheckId, CheckStatus, Confidence, Family, GateRule, Level, Milestone, Need, Severity,
@@ -28,3 +29,4 @@ pub use model::{
     Verdict,
 };
 pub use registry::{CheckMeta, REGISTRY, meta};
+pub use schema_export::{SchemaFile, SchemaKind, TYPESCRIPT_DIR, TypeScriptFile};

@@ -1,0 +1,643 @@
+{
+  "$defs": {
+    "AxeViolation": {
+      "additionalProperties": false,
+      "description": "One axe-core violation.",
+      "properties": {
+        "id": {
+          "description": "The rule ID.",
+          "type": "string"
+        },
+        "impact": {
+          "description": "The impact axe reported.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nodes": {
+          "description": "How many nodes matched.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "nodes"
+      ],
+      "type": "object"
+    },
+    "BlobRef": {
+      "description": "A content-addressed blob reference, written as `sha256:<hex>`.",
+      "type": "string"
+    },
+    "DbDelta": {
+      "additionalProperties": false,
+      "description": "What the DB channel saw.",
+      "properties": {
+        "delete": {
+          "$ref": "#/$defs/RowCounts",
+          "description": "Rows deleted."
+        },
+        "insert": {
+          "$ref": "#/$defs/RowCounts",
+          "description": "Rows inserted."
+        },
+        "update": {
+          "$ref": "#/$defs/RowCounts",
+          "description": "Rows updated."
+        }
+      },
+      "required": [
+        "insert",
+        "update",
+        "delete"
+      ],
+      "type": "object"
+    },
+    "EgressEntry": {
+      "additionalProperties": false,
+      "description": "One third-party request the egress proxy saw.",
+      "properties": {
+        "body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The request body, as a blob."
+        },
+        "bytes": {
+          "description": "The request size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "host": {
+          "description": "The host contacted.",
+          "type": "string"
+        },
+        "method": {
+          "description": "The method.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "method",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "EmailEntry": {
+      "additionalProperties": false,
+      "description": "One email the app sent.",
+      "properties": {
+        "body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The body, as a blob."
+        },
+        "subject": {
+          "description": "The subject.",
+          "type": "string"
+        },
+        "to": {
+          "description": "The recipient.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "to",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "Logs": {
+      "additionalProperties": false,
+      "description": "Counts the driver and the recorder collect from the browser and the server.",
+      "properties": {
+        "console_errors": {
+          "description": "Uncaught console errors.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_errors": {
+          "description": "Uncaught page errors.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "server_errors": {
+          "$ref": "#/$defs/Measured2",
+          "description": "Server error lines between action start and settle."
+        },
+        "server_lines": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The matching server lines, as a blob."
+        }
+      },
+      "required": [
+        "console_errors",
+        "page_errors",
+        "server_errors"
+      ],
+      "type": "object"
+    },
+    "Measured": {
+      "description": "The value a channel produced, or why it produced none.\n\nEvery channel of an [`crate::model::EffectRecord`] is wrapped in this, so\n\"nothing happened\" stays distinguishable from \"nothing was watched\".",
+      "oneOf": [
+        {
+          "description": "The channel was observed and holds `value`.",
+          "properties": {
+            "status": {
+              "const": "measured",
+              "type": "string"
+            },
+            "value": {
+              "description": "What the channel observed.",
+              "items": {
+                "$ref": "#/$defs/WsFrame"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "status",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The channel could not be observed; `reason` says why.",
+          "properties": {
+            "reason": {
+              "description": "Why the channel is missing, for example `\"sqlite\" `.",
+              "type": "string"
+            },
+            "status": {
+              "const": "not_measured",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Measured2": {
+      "description": "The value a channel produced, or why it produced none.\n\nEvery channel of an [`crate::model::EffectRecord`] is wrapped in this, so\n\"nothing happened\" stays distinguishable from \"nothing was watched\".",
+      "oneOf": [
+        {
+          "description": "The channel was observed and holds `value`.",
+          "properties": {
+            "status": {
+              "const": "measured",
+              "type": "string"
+            },
+            "value": {
+              "description": "What the channel observed.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "status",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The channel could not be observed; `reason` says why.",
+          "properties": {
+            "reason": {
+              "description": "Why the channel is missing, for example `\"sqlite\" `.",
+              "type": "string"
+            },
+            "status": {
+              "const": "not_measured",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NetEntry": {
+      "additionalProperties": false,
+      "description": "One HTTP request the page made.",
+      "properties": {
+        "failed": {
+          "description": "Why the request failed, when it was aborted or blocked.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "description": "The method.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The path, with query parameters.",
+          "type": "string"
+        },
+        "req_body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The request body, as a blob."
+        },
+        "res_body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The response body, as a blob."
+        },
+        "status": {
+          "description": "The status code, absent when the request never completed.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "path"
+      ],
+      "type": "object"
+    },
+    "RowCounts": {
+      "additionalProperties": false,
+      "description": "Row counts per table for one kind of write.",
+      "properties": {
+        "counts": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Table name to row count, sorted by table.",
+          "type": "object"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The changed rows themselves, as a blob."
+        }
+      },
+      "required": [
+        "counts"
+      ],
+      "type": "object"
+    },
+    "Storage": {
+      "additionalProperties": false,
+      "description": "Browser storage after the action.",
+      "properties": {
+        "cookies": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Cookie names and values, sorted by name.",
+          "type": "object"
+        },
+        "indexeddb": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "IndexedDB entries, sorted by key.",
+          "type": "object"
+        },
+        "local": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "`localStorage` entries, sorted by key.",
+          "type": "object"
+        },
+        "session": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "`sessionStorage` entries, sorted by key.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "local",
+        "session",
+        "indexeddb",
+        "cookies"
+      ],
+      "type": "object"
+    },
+    "Timestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "Ui": {
+      "additionalProperties": false,
+      "description": "The browser's view of what the action changed.",
+      "properties": {
+        "dialog": {
+          "description": "A dialog the action opened, as text.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dom_changed": {
+          "description": "Whether the normalized DOM changed at all.",
+          "type": "boolean"
+        },
+        "dom_hash_after": {
+          "description": "Content-derived hash of the normalized DOM after the action.",
+          "type": "string"
+        },
+        "dom_hash_before": {
+          "description": "Content-derived hash of the normalized DOM before the action.",
+          "type": "string"
+        },
+        "download": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A download the action started, as a blob."
+        },
+        "url_after": {
+          "description": "The URL after the action settled.",
+          "type": "string"
+        },
+        "url_before": {
+          "description": "The URL before the action.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url_before",
+        "url_after",
+        "dom_changed",
+        "dom_hash_before",
+        "dom_hash_after"
+      ],
+      "type": "object"
+    },
+    "WsFrame": {
+      "additionalProperties": false,
+      "description": "One WebSocket frame.",
+      "properties": {
+        "bytes": {
+          "description": "The payload size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "direction": {
+          "description": "`sent` or `received`.",
+          "type": "string"
+        },
+        "payload": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The frame payload, as a blob when large."
+        },
+        "url": {
+          "description": "The socket URL.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "direction",
+        "bytes"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One event the driver writes.",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "description": "The driver is ready for a command.",
+      "properties": {
+        "event": {
+          "const": "ready",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The browser channels of one action.\n\nBoxed, because a record part is much larger than the other events.",
+      "properties": {
+        "axe_violations": {
+          "description": "Axe-core violations, when `axe` ran.",
+          "items": {
+            "$ref": "#/$defs/AxeViolation"
+          },
+          "type": "array"
+        },
+        "db": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DbDelta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Channels the recorder captures itself, absent here."
+        },
+        "egress": {
+          "description": "Channels the recorder captures itself, absent here.",
+          "items": {
+            "$ref": "#/$defs/EgressEntry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "email": {
+          "description": "Channels the recorder captures itself, absent here.",
+          "items": {
+            "$ref": "#/$defs/EmailEntry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "event": {
+          "const": "record_part",
+          "type": "string"
+        },
+        "logs": {
+          "$ref": "#/$defs/Logs",
+          "description": "Console and page errors; the server part is filled in by the recorder."
+        },
+        "net": {
+          "description": "Requests in order.",
+          "items": {
+            "$ref": "#/$defs/NetEntry"
+          },
+          "type": "array"
+        },
+        "queries": {
+          "description": "Channels the recorder captures itself, absent here.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "settled_at": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "When the action settled, on the frozen clock."
+        },
+        "storage": {
+          "$ref": "#/$defs/Storage",
+          "description": "Browser storage after the action."
+        },
+        "ui": {
+          "$ref": "#/$defs/Ui",
+          "description": "The browser's view of the change."
+        },
+        "visible_text": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Visible text by element, for unused-field detection.",
+          "type": "object"
+        },
+        "ws": {
+          "$ref": "#/$defs/Measured",
+          "description": "WebSocket frames, or a reason they were not captured."
+        }
+      },
+      "required": [
+        "event",
+        "ui",
+        "net",
+        "ws",
+        "storage",
+        "logs",
+        "settled_at",
+        "visible_text",
+        "axe_violations"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The driver reports a problem with the command.",
+      "properties": {
+        "cmd": {
+          "description": "The command that failed.",
+          "type": "string"
+        },
+        "event": {
+          "const": "error",
+          "type": "string"
+        },
+        "message": {
+          "description": "The message, with session secrets replaced.",
+          "type": "string"
+        },
+        "recoverable": {
+          "description": "Whether the driver kept the context usable.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "event",
+        "cmd",
+        "message",
+        "recoverable"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The command finished.",
+      "properties": {
+        "event": {
+          "const": "done",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "DriverEvent"
+}

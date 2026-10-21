@@ -65,6 +65,66 @@ pub fn canonical_json_value(value: &serde_json::Value) -> Vec<u8> {
     out
 }
 
+/// Writes a JSON value as canonical JSON for a file: sorted keys, two-space indent,
+/// and a trailing newline.
+///
+/// Committed artifacts such as `schemas/json/*.schema.json` use this, so regenerating
+/// them produces the same bytes on every machine and every run.
+#[must_use]
+pub fn canonical_json_pretty_value(value: &serde_json::Value) -> Vec<u8> {
+    let mut out = Vec::new();
+    write_pretty_value(&mut out, value, 0);
+    out.push(b'\n');
+    out
+}
+
+/// Writes `value` at `depth` levels of indentation.
+fn write_pretty_value(out: &mut Vec<u8>, value: &serde_json::Value, depth: usize) {
+    match value {
+        serde_json::Value::Array(items) if !items.is_empty() => {
+            out.extend_from_slice(b"[\n");
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.extend_from_slice(b",\n");
+                }
+                write_indent(out, depth + 1);
+                write_pretty_value(out, item, depth + 1);
+            }
+            out.push(b'\n');
+            write_indent(out, depth);
+            out.push(b']');
+        }
+        serde_json::Value::Object(map) if !map.is_empty() => {
+            out.extend_from_slice(b"{\n");
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+            for (index, key) in keys.iter().enumerate() {
+                if index > 0 {
+                    out.extend_from_slice(b",\n");
+                }
+                write_indent(out, depth + 1);
+                write_string(out, key);
+                out.extend_from_slice(b": ");
+                match map.get(*key) {
+                    Some(inner) => write_pretty_value(out, inner, depth + 1),
+                    None => out.extend_from_slice(b"null"),
+                }
+            }
+            out.push(b'\n');
+            write_indent(out, depth);
+            out.push(b'}');
+        }
+        other => write_value(out, other),
+    }
+}
+
+/// Writes two spaces per level.
+fn write_indent(out: &mut Vec<u8>, depth: usize) {
+    for _ in 0..depth * 2 {
+        out.push(b' ');
+    }
+}
+
 fn write_value(out: &mut Vec<u8>, value: &serde_json::Value) {
     match value {
         serde_json::Value::Null => out.extend_from_slice(b"null"),

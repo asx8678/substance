@@ -1,0 +1,250 @@
+{
+  "$defs": {
+    "AccessMode": {
+      "description": "How the run reaches the code under test. Only `repo` is accepted in v1 (ADR-0004).",
+      "oneOf": [
+        {
+          "const": "repo",
+          "description": "A repository, at a commit.",
+          "type": "string"
+        },
+        {
+          "const": "url",
+          "description": "A live URL; kept in the schema, rejected by intake in v1.",
+          "type": "string"
+        },
+        {
+          "const": "repo_url",
+          "description": "A repository plus a live URL; kept in the schema, rejected by intake in v1.",
+          "type": "string"
+        }
+      ]
+    },
+    "BlobRef": {
+      "description": "A content-addressed blob reference, written as `sha256:<hex>`.",
+      "type": "string"
+    },
+    "Host": {
+      "additionalProperties": false,
+      "description": "The host the run happened on, for explanation only.",
+      "properties": {
+        "arch": {
+          "description": "`aarch64` or `x86_64`.",
+          "type": "string"
+        },
+        "os": {
+          "description": "`macos`, `linux` or `windows`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "os",
+        "arch"
+      ],
+      "type": "object"
+    },
+    "RepoRef": {
+      "additionalProperties": false,
+      "description": "Where the code under test came from.",
+      "properties": {
+        "commit_sha": {
+          "description": "The commit that was exported to the working copy.",
+          "type": "string"
+        },
+        "origin": {
+          "description": "The origin URL, without credentials.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin",
+        "commit_sha"
+      ],
+      "type": "object"
+    },
+    "RunId": {
+      "description": "A run identifier: `run_<26 base32 chars>`.\n\nHashed from the run manifest with the `run_id` field removed.",
+      "type": "string"
+    },
+    "ServerClock": {
+      "description": "How the server's clock behaves during the run.",
+      "oneOf": [
+        {
+          "const": "fixed_start",
+          "description": "Started at `frozen_clock` and left advancing (Linux only, ADR-0022).",
+          "type": "string"
+        },
+        {
+          "const": "real",
+          "description": "The host's real clock; clock-dependent checks report not_measured.",
+          "type": "string"
+        }
+      ]
+    },
+    "Timestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "ToolVersion": {
+      "additionalProperties": false,
+      "description": "The version of a tool found on `PATH`.",
+      "properties": {
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlobRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The blob holding the output."
+        },
+        "tool": {
+          "description": "The tool, as named in `tools.toml`.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version it reported.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Every pinned input, and nothing that depends on where the run was invoked.",
+  "properties": {
+    "access_mode": {
+      "$ref": "#/$defs/AccessMode",
+      "description": "How the code was reached."
+    },
+    "allow_exec": {
+      "description": "Whether `--allow-exec` was given.",
+      "type": "boolean"
+    },
+    "as_of": {
+      "$ref": "#/$defs/Timestamp",
+      "description": "The instant every relative date is computed from."
+    },
+    "config_hash": {
+      "description": "The project config's content hash.",
+      "type": "string"
+    },
+    "egress_enforced": {
+      "description": "Whether egress was actually enforced; false on the host runner (ADR-0003).",
+      "type": "boolean"
+    },
+    "frozen_clock": {
+      "$ref": "#/$defs/Timestamp",
+      "description": "The clock value pinned for the browser and, when supported, the server."
+    },
+    "host": {
+      "$ref": "#/$defs/Host",
+      "description": "The host."
+    },
+    "locale": {
+      "description": "The locale forced on the browser, normally `\"en-US\"`.",
+      "type": "string"
+    },
+    "master_seed": {
+      "description": "The master seed all generator seeds derive from.",
+      "type": "string"
+    },
+    "models": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Model IDs, empty while the agent layer is off (ADR-0006).",
+      "type": "object"
+    },
+    "repetitions": {
+      "description": "How many times each action runs; 3, for the 3-of-3 rule.",
+      "format": "uint8",
+      "maximum": 255,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "repo": {
+      "$ref": "#/$defs/RepoRef",
+      "description": "The code under test."
+    },
+    "rule_pack_hash": {
+      "description": "The rule pack's content hash.",
+      "type": "string"
+    },
+    "run_id": {
+      "$ref": "#/$defs/RunId",
+      "description": "Content-derived run ID."
+    },
+    "schema_version": {
+      "description": "The report schema version this run writes.",
+      "type": "string"
+    },
+    "scoring_weights_version": {
+      "description": "The scoring weights version.",
+      "type": "string"
+    },
+    "seeds": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "One seed per random-input generator, sorted by generator name.",
+      "type": "object"
+    },
+    "server_clock": {
+      "$ref": "#/$defs/ServerClock",
+      "description": "Whether the server clock was moved or left real."
+    },
+    "substance_version": {
+      "description": "The substance version.",
+      "type": "string"
+    },
+    "thresholds_version": {
+      "description": "The thresholds version.",
+      "type": "string"
+    },
+    "timezone": {
+      "description": "The timezone forced on the app, normally `\"UTC\"`.",
+      "type": "string"
+    },
+    "tools": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ToolVersion"
+      },
+      "description": "Tool versions found on `PATH`, sorted by tool name.",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "substance_version",
+    "run_id",
+    "repo",
+    "access_mode",
+    "as_of",
+    "master_seed",
+    "seeds",
+    "frozen_clock",
+    "server_clock",
+    "timezone",
+    "locale",
+    "tools",
+    "models",
+    "rule_pack_hash",
+    "thresholds_version",
+    "scoring_weights_version",
+    "config_hash",
+    "allow_exec",
+    "egress_enforced",
+    "repetitions",
+    "host"
+  ],
+  "title": "RunManifest",
+  "type": "object"
+}

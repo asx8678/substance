@@ -8,6 +8,7 @@ mod checks;
 mod cli;
 mod error;
 mod output;
+mod schema;
 
 use std::process::ExitCode;
 
@@ -47,8 +48,8 @@ fn dispatch(command: Command) -> Result<ExitCode, CliError> {
         Command::Bench(_args) => not_yet("M5"),
         Command::Report(_args) => not_yet("M13"),
         Command::Schema { command } => match command {
-            SchemaCommand::Export(_args) => not_yet("M0"),
-            SchemaCommand::Validate(_args) => not_yet("M0"),
+            SchemaCommand::Export(args) => schema::export(&args),
+            SchemaCommand::Validate(args) => schema::validate(&args),
         },
         Command::Checks { command } => match command {
             ChecksCommand::List(args) => {

@@ -1,0 +1,1166 @@
+{
+  "$defs": {
+    "ApiRequest": {
+      "additionalProperties": false,
+      "description": "An HTTP request template the runner sends on the app's behalf.",
+      "properties": {
+        "body": {
+          "default": null,
+          "description": "The body template, with `{email}`, `{password}` and `{handle}` placeholders.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "default": "POST",
+          "description": "The method.",
+          "type": "string"
+        },
+        "path": {
+          "default": "",
+          "description": "The path, relative to the app's origin.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "AppConfig": {
+      "additionalProperties": false,
+      "description": "How the app is installed, built, migrated, seeded and started (boot ladder rung 2, ADR-0017).",
+      "properties": {
+        "build": {
+          "default": null,
+          "description": "The build command.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Extra environment for every command, sorted by name.",
+          "type": "object"
+        },
+        "health_path": {
+          "default": null,
+          "description": "The path O06 probes with the database down; no path means O06 is not measured.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "install": {
+          "default": null,
+          "description": "The install command, for example `npm ci`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "migrate": {
+          "default": null,
+          "description": "The migration command.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port_env": {
+          "default": "PORT",
+          "description": "The variable the server reads its port from.",
+          "type": "string"
+        },
+        "ready_path": {
+          "default": "/",
+          "description": "The path that answers once the server is up.",
+          "type": "string"
+        },
+        "seed": {
+          "default": null,
+          "description": "The seed command.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start": {
+          "default": null,
+          "description": "The command that starts the long-running server; substance supplies the port.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Budgets": {
+      "additionalProperties": false,
+      "description": "Time and count limits, in seconds, milliseconds or counts (ADR-0002).",
+      "properties": {
+        "blame_max_files": {
+          "default": 5000,
+          "description": "Files the blame check may inspect.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crawl_max_actions": {
+          "default": 2000,
+          "description": "Actions the crawl may run.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crawl_max_depth": {
+          "default": 6,
+          "description": "Crawl depth.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crawl_max_screens": {
+          "default": 200,
+          "description": "Screens the crawl may visit.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "forge_max_requests": {
+          "default": 3000,
+          "description": "Requests the forge check may send.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "idle_baseline_ms": {
+          "default": 5000,
+          "description": "How long the idle baseline is sampled.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run_s": {
+          "default": 1800,
+          "description": "Whole-run time limit.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_quiet_ms": {
+          "default": 500,
+          "description": "How long the network must stay quiet before an action counts as settled.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_timeout_ms": {
+          "default": 10000,
+          "description": "The cap on settling one action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shutdown_grace_s": {
+          "default": 30,
+          "description": "How long a server gets to exit before it is killed.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "triage_s": {
+          "default": 120,
+          "description": "Triage time limit.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "CheckId": {
+      "description": "Every check in the catalog, in ID order.\n\nThe discriminants are positional, so `CheckId::B01 as usize == 0` and\n`id as usize` is the registry index.",
+      "oneOf": [
+        {
+          "const": "B01",
+          "description": "The `B01` check.",
+          "type": "string"
+        },
+        {
+          "const": "B02",
+          "description": "The `B02` check.",
+          "type": "string"
+        },
+        {
+          "const": "B03",
+          "description": "The `B03` check.",
+          "type": "string"
+        },
+        {
+          "const": "B04",
+          "description": "The `B04` check.",
+          "type": "string"
+        },
+        {
+          "const": "B05",
+          "description": "The `B05` check.",
+          "type": "string"
+        },
+        {
+          "const": "B06",
+          "description": "The `B06` check.",
+          "type": "string"
+        },
+        {
+          "const": "B07",
+          "description": "The `B07` check.",
+          "type": "string"
+        },
+        {
+          "const": "B08",
+          "description": "The `B08` check.",
+          "type": "string"
+        },
+        {
+          "const": "B09",
+          "description": "The `B09` check.",
+          "type": "string"
+        },
+        {
+          "const": "B10",
+          "description": "The `B10` check.",
+          "type": "string"
+        },
+        {
+          "const": "B11",
+          "description": "The `B11` check.",
+          "type": "string"
+        },
+        {
+          "const": "B12",
+          "description": "The `B12` check.",
+          "type": "string"
+        },
+        {
+          "const": "B13",
+          "description": "The `B13` check.",
+          "type": "string"
+        },
+        {
+          "const": "B14",
+          "description": "The `B14` check.",
+          "type": "string"
+        },
+        {
+          "const": "B15",
+          "description": "The `B15` check.",
+          "type": "string"
+        },
+        {
+          "const": "B16",
+          "description": "The `B16` check.",
+          "type": "string"
+        },
+        {
+          "const": "B17",
+          "description": "The `B17` check.",
+          "type": "string"
+        },
+        {
+          "const": "B18",
+          "description": "The `B18` check.",
+          "type": "string"
+        },
+        {
+          "const": "B19",
+          "description": "The `B19` check.",
+          "type": "string"
+        },
+        {
+          "const": "B20",
+          "description": "The `B20` check.",
+          "type": "string"
+        },
+        {
+          "const": "B21",
+          "description": "The `B21` check.",
+          "type": "string"
+        },
+        {
+          "const": "B22",
+          "description": "The `B22` check.",
+          "type": "string"
+        },
+        {
+          "const": "B23",
+          "description": "The `B23` check.",
+          "type": "string"
+        },
+        {
+          "const": "B24",
+          "description": "The `B24` check.",
+          "type": "string"
+        },
+        {
+          "const": "B25",
+          "description": "The `B25` check.",
+          "type": "string"
+        },
+        {
+          "const": "B26",
+          "description": "The `B26` check.",
+          "type": "string"
+        },
+        {
+          "const": "B27",
+          "description": "The `B27` check.",
+          "type": "string"
+        },
+        {
+          "const": "B28",
+          "description": "The `B28` check.",
+          "type": "string"
+        },
+        {
+          "const": "B29",
+          "description": "The `B29` check.",
+          "type": "string"
+        },
+        {
+          "const": "B30",
+          "description": "The `B30` check.",
+          "type": "string"
+        },
+        {
+          "const": "B31",
+          "description": "The `B31` check.",
+          "type": "string"
+        },
+        {
+          "const": "B32",
+          "description": "The `B32` check.",
+          "type": "string"
+        },
+        {
+          "const": "B33",
+          "description": "The `B33` check.",
+          "type": "string"
+        },
+        {
+          "const": "I01",
+          "description": "The `I01` check.",
+          "type": "string"
+        },
+        {
+          "const": "I02",
+          "description": "The `I02` check.",
+          "type": "string"
+        },
+        {
+          "const": "I03",
+          "description": "The `I03` check.",
+          "type": "string"
+        },
+        {
+          "const": "I04",
+          "description": "The `I04` check.",
+          "type": "string"
+        },
+        {
+          "const": "D01",
+          "description": "The `D01` check.",
+          "type": "string"
+        },
+        {
+          "const": "D02",
+          "description": "The `D02` check.",
+          "type": "string"
+        },
+        {
+          "const": "D03",
+          "description": "The `D03` check.",
+          "type": "string"
+        },
+        {
+          "const": "D04",
+          "description": "The `D04` check.",
+          "type": "string"
+        },
+        {
+          "const": "O01",
+          "description": "The `O01` check.",
+          "type": "string"
+        },
+        {
+          "const": "O02",
+          "description": "The `O02` check.",
+          "type": "string"
+        },
+        {
+          "const": "O03",
+          "description": "The `O03` check.",
+          "type": "string"
+        },
+        {
+          "const": "O04",
+          "description": "The `O04` check.",
+          "type": "string"
+        },
+        {
+          "const": "O05",
+          "description": "The `O05` check.",
+          "type": "string"
+        },
+        {
+          "const": "O06",
+          "description": "The `O06` check.",
+          "type": "string"
+        },
+        {
+          "const": "O07",
+          "description": "The `O07` check.",
+          "type": "string"
+        },
+        {
+          "const": "O08",
+          "description": "The `O08` check.",
+          "type": "string"
+        },
+        {
+          "const": "O09",
+          "description": "The `O09` check.",
+          "type": "string"
+        },
+        {
+          "const": "O10",
+          "description": "The `O10` check.",
+          "type": "string"
+        },
+        {
+          "const": "O11",
+          "description": "The `O11` check.",
+          "type": "string"
+        },
+        {
+          "const": "L01",
+          "description": "The `L01` check.",
+          "type": "string"
+        },
+        {
+          "const": "L02",
+          "description": "The `L02` check.",
+          "type": "string"
+        },
+        {
+          "const": "L03",
+          "description": "The `L03` check.",
+          "type": "string"
+        },
+        {
+          "const": "L04",
+          "description": "The `L04` check.",
+          "type": "string"
+        },
+        {
+          "const": "L05",
+          "description": "The `L05` check.",
+          "type": "string"
+        },
+        {
+          "const": "S01",
+          "description": "The `S01` check.",
+          "type": "string"
+        },
+        {
+          "const": "S02",
+          "description": "The `S02` check.",
+          "type": "string"
+        },
+        {
+          "const": "S03",
+          "description": "The `S03` check.",
+          "type": "string"
+        },
+        {
+          "const": "S04",
+          "description": "The `S04` check.",
+          "type": "string"
+        },
+        {
+          "const": "S05",
+          "description": "The `S05` check.",
+          "type": "string"
+        },
+        {
+          "const": "S06",
+          "description": "The `S06` check.",
+          "type": "string"
+        },
+        {
+          "const": "S07",
+          "description": "The `S07` check.",
+          "type": "string"
+        },
+        {
+          "const": "S08",
+          "description": "The `S08` check.",
+          "type": "string"
+        },
+        {
+          "const": "S09",
+          "description": "The `S09` check.",
+          "type": "string"
+        },
+        {
+          "const": "S10",
+          "description": "The `S10` check.",
+          "type": "string"
+        },
+        {
+          "const": "S11",
+          "description": "The `S11` check.",
+          "type": "string"
+        },
+        {
+          "const": "S12",
+          "description": "The `S12` check.",
+          "type": "string"
+        },
+        {
+          "const": "T01",
+          "description": "The `T01` check.",
+          "type": "string"
+        },
+        {
+          "const": "T02",
+          "description": "The `T02` check.",
+          "type": "string"
+        },
+        {
+          "const": "T03",
+          "description": "The `T03` check.",
+          "type": "string"
+        },
+        {
+          "const": "T04",
+          "description": "The `T04` check.",
+          "type": "string"
+        },
+        {
+          "const": "T05",
+          "description": "The `T05` check.",
+          "type": "string"
+        },
+        {
+          "const": "T06",
+          "description": "The `T06` check.",
+          "type": "string"
+        },
+        {
+          "const": "P01",
+          "description": "The `P01` check.",
+          "type": "string"
+        },
+        {
+          "const": "P02",
+          "description": "The `P02` check.",
+          "type": "string"
+        },
+        {
+          "const": "P03",
+          "description": "The `P03` check.",
+          "type": "string"
+        },
+        {
+          "const": "P04",
+          "description": "The `P04` check.",
+          "type": "string"
+        },
+        {
+          "const": "P05",
+          "description": "The `P05` check.",
+          "type": "string"
+        },
+        {
+          "const": "P06",
+          "description": "The `P06` check.",
+          "type": "string"
+        },
+        {
+          "const": "P07",
+          "description": "The `P07` check.",
+          "type": "string"
+        },
+        {
+          "const": "H01",
+          "description": "The `H01` check.",
+          "type": "string"
+        },
+        {
+          "const": "H02",
+          "description": "The `H02` check.",
+          "type": "string"
+        },
+        {
+          "const": "H03",
+          "description": "The `H03` check.",
+          "type": "string"
+        },
+        {
+          "const": "H04",
+          "description": "The `H04` check.",
+          "type": "string"
+        },
+        {
+          "const": "H05",
+          "description": "The `H05` check.",
+          "type": "string"
+        },
+        {
+          "const": "H06",
+          "description": "The `H06` check.",
+          "type": "string"
+        },
+        {
+          "const": "H07",
+          "description": "The `H07` check.",
+          "type": "string"
+        },
+        {
+          "const": "H08",
+          "description": "The `H08` check.",
+          "type": "string"
+        },
+        {
+          "const": "H09",
+          "description": "The `H09` check.",
+          "type": "string"
+        },
+        {
+          "const": "H10",
+          "description": "The `H10` check.",
+          "type": "string"
+        },
+        {
+          "const": "H11",
+          "description": "The `H11` check.",
+          "type": "string"
+        },
+        {
+          "const": "H12",
+          "description": "The `H12` check.",
+          "type": "string"
+        },
+        {
+          "const": "H13",
+          "description": "The `H13` check.",
+          "type": "string"
+        },
+        {
+          "const": "H14",
+          "description": "The `H14` check.",
+          "type": "string"
+        },
+        {
+          "const": "H15",
+          "description": "The `H15` check.",
+          "type": "string"
+        },
+        {
+          "const": "H16",
+          "description": "The `H16` check.",
+          "type": "string"
+        },
+        {
+          "const": "H17",
+          "description": "The `H17` check.",
+          "type": "string"
+        },
+        {
+          "const": "H18",
+          "description": "The `H18` check.",
+          "type": "string"
+        },
+        {
+          "const": "H19",
+          "description": "The `H19` check.",
+          "type": "string"
+        },
+        {
+          "const": "H20",
+          "description": "The `H20` check.",
+          "type": "string"
+        },
+        {
+          "const": "H21",
+          "description": "The `H21` check.",
+          "type": "string"
+        },
+        {
+          "const": "H22",
+          "description": "The `H22` check.",
+          "type": "string"
+        },
+        {
+          "const": "V01",
+          "description": "The `V01` check.",
+          "type": "string"
+        },
+        {
+          "const": "V02",
+          "description": "The `V02` check.",
+          "type": "string"
+        },
+        {
+          "const": "V03",
+          "description": "The `V03` check.",
+          "type": "string"
+        },
+        {
+          "const": "A01",
+          "description": "The `A01` check.",
+          "type": "string"
+        },
+        {
+          "const": "A02",
+          "description": "The `A02` check.",
+          "type": "string"
+        },
+        {
+          "const": "A03",
+          "description": "The `A03` check.",
+          "type": "string"
+        },
+        {
+          "const": "A04",
+          "description": "The `A04` check.",
+          "type": "string"
+        },
+        {
+          "const": "A05",
+          "description": "The `A05` check.",
+          "type": "string"
+        },
+        {
+          "const": "G01",
+          "description": "The `G01` check.",
+          "type": "string"
+        },
+        {
+          "const": "G02",
+          "description": "The `G02` check.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChecksConfig": {
+      "additionalProperties": false,
+      "description": "Checks the project switched off. They are reported as `not_measured` (M0-T08).",
+      "properties": {
+        "disable": {
+          "default": [],
+          "description": "The checks to skip, in ID order and without duplicates.",
+          "items": {
+            "$ref": "#/$defs/CheckId"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "type": "object"
+    },
+    "DbConfig": {
+      "additionalProperties": false,
+      "description": "The database section of the config.",
+      "properties": {
+        "engine": {
+          "$ref": "#/$defs/DbEngine",
+          "default": "postgres",
+          "description": "The engine."
+        },
+        "retained_tables": {
+          "default": [],
+          "description": "Tables B25 excludes from the deletion check, because the law keeps their rows.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "sqlite_path": {
+          "default": null,
+          "description": "The SQLite file, relative to the repository root.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url_env": {
+          "default": "DATABASE_URL",
+          "description": "The variable the app reads its connection URL from.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "DbEngine": {
+      "description": "Which database the app uses (ADR-0018).",
+      "oneOf": [
+        {
+          "const": "postgres",
+          "description": "Postgres, with logical decoding for the database channel.",
+          "type": "string"
+        },
+        {
+          "const": "sqlite",
+          "description": "A SQLite file.",
+          "type": "string"
+        },
+        {
+          "const": "supabase",
+          "description": "A local Supabase stack.",
+          "type": "string"
+        }
+      ]
+    },
+    "EgressConfig": {
+      "additionalProperties": false,
+      "description": "Hosts the egress proxy lets through (M3-T04).",
+      "properties": {
+        "allow": {
+          "default": [],
+          "description": "Allowed hosts. The proxy denies everything else.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "type": "object"
+    },
+    "LoginConfig": {
+      "additionalProperties": false,
+      "description": "How to log in (M4-T01). Set `ui` or `api`; set neither to let the crawl detect a\nsingle password form, and set both to log in through the API and check the form.",
+      "properties": {
+        "api": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApiRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The request to send instead of filling the form."
+        },
+        "ui": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoginUi"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The form to fill."
+        }
+      },
+      "type": "object"
+    },
+    "LoginUi": {
+      "additionalProperties": false,
+      "description": "A login form the crawl can fill.",
+      "properties": {
+        "identifier": {
+          "default": "",
+          "description": "The selector of the identifier field.",
+          "type": "string"
+        },
+        "password": {
+          "default": "",
+          "description": "The selector of the password field.",
+          "type": "string"
+        },
+        "path": {
+          "default": "",
+          "description": "The path of the login screen.",
+          "type": "string"
+        },
+        "submit": {
+          "default": "",
+          "description": "The selector of the submit control.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "MailConfig": {
+      "additionalProperties": false,
+      "description": "The app's mail environment. Mailpit supplies the values (M3-T04).",
+      "properties": {
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "The environment the app gets, sorted by name, with `{smtp_host}` and `{smtp_port}`\nfilled in by the runner.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "NormalizeConfig": {
+      "additionalProperties": false,
+      "description": "Project normalization rules, applied before hashing and diffing.",
+      "properties": {
+        "patterns": {
+          "default": [],
+          "description": "The rules, in the order they are applied. The built-in rules come first.",
+          "items": {
+            "$ref": "#/$defs/NormalizePattern"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "NormalizePattern": {
+      "additionalProperties": false,
+      "description": "One normalization rule.",
+      "properties": {
+        "regex": {
+          "description": "The pattern to replace.",
+          "type": "string"
+        },
+        "replace": {
+          "description": "What to replace it with.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "regex",
+        "replace"
+      ],
+      "type": "object"
+    },
+    "SignalsConfig": {
+      "additionalProperties": false,
+      "description": "Extra selectors that stand in for agent labels (M12).",
+      "properties": {
+        "error": {
+          "default": [],
+          "description": "Selectors that claim an error, in matching order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "success": {
+          "default": [],
+          "description": "Selectors that claim success, in matching order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "SignupConfig": {
+      "additionalProperties": false,
+      "description": "The account creation request.",
+      "properties": {
+        "api": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApiRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The request that creates an account."
+        }
+      },
+      "type": "object"
+    },
+    "UserConfig": {
+      "additionalProperties": false,
+      "description": "One test account. Secrets are named, never stored.",
+      "properties": {
+        "create": {
+          "$ref": "#/$defs/UserCreate",
+          "default": "api",
+          "description": "How the account is created."
+        },
+        "email": {
+          "default": "",
+          "description": "The address to register and to read mail at.",
+          "type": "string"
+        },
+        "handle": {
+          "default": "",
+          "description": "The handle that identifies the account in reports.",
+          "type": "string"
+        },
+        "password_env": {
+          "default": "",
+          "description": "The name of the environment variable that holds the password.",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "description": "The role this account proves, for example `user` or `admin`.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "UserCreate": {
+      "description": "How a `[[users]]` account is created (M2-T04).",
+      "oneOf": [
+        {
+          "const": "api",
+          "description": "Through the `[signup]` request template.",
+          "type": "string"
+        },
+        {
+          "const": "sql",
+          "description": "With SQL against the run database.",
+          "type": "string"
+        },
+        {
+          "const": "supabase",
+          "description": "Through the Supabase GoTrue admin API.",
+          "type": "string"
+        },
+        {
+          "const": "ui",
+          "description": "Through the app's own signup form.",
+          "type": "string"
+        },
+        {
+          "const": "existing",
+          "description": "It already exists after seeding.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The whole project config, one field per `[section]` of `substance.toml`.",
+  "properties": {
+    "app": {
+      "$ref": "#/$defs/AppConfig",
+      "default": {
+        "build": null,
+        "env": {},
+        "health_path": null,
+        "install": null,
+        "migrate": null,
+        "port_env": "PORT",
+        "ready_path": "/",
+        "seed": null,
+        "start": null
+      },
+      "description": "How the app is installed, built, migrated, seeded and started."
+    },
+    "budgets": {
+      "$ref": "#/$defs/Budgets",
+      "default": {
+        "blame_max_files": 5000,
+        "crawl_max_actions": 2000,
+        "crawl_max_depth": 6,
+        "crawl_max_screens": 200,
+        "forge_max_requests": 3000,
+        "idle_baseline_ms": 5000,
+        "run_s": 1800,
+        "settle_quiet_ms": 500,
+        "settle_timeout_ms": 10000,
+        "shutdown_grace_s": 30,
+        "triage_s": 120
+      },
+      "description": "Time and count limits."
+    },
+    "checks": {
+      "$ref": "#/$defs/ChecksConfig",
+      "default": {
+        "disable": []
+      },
+      "description": "Checks the project switched off."
+    },
+    "db": {
+      "$ref": "#/$defs/DbConfig",
+      "default": {
+        "engine": "postgres",
+        "retained_tables": [],
+        "sqlite_path": null,
+        "url_env": "DATABASE_URL"
+      },
+      "description": "Which database the app uses and how it is reached."
+    },
+    "egress": {
+      "$ref": "#/$defs/EgressConfig",
+      "default": {
+        "allow": []
+      },
+      "description": "Hosts the egress proxy lets through."
+    },
+    "login": {
+      "$ref": "#/$defs/LoginConfig",
+      "default": {
+        "api": null,
+        "ui": null
+      },
+      "description": "How to log in: a form or an API call."
+    },
+    "mail": {
+      "$ref": "#/$defs/MailConfig",
+      "default": {
+        "env": {}
+      },
+      "description": "The environment the app gets for sending mail."
+    },
+    "normalize": {
+      "$ref": "#/$defs/NormalizeConfig",
+      "default": {
+        "patterns": []
+      },
+      "description": "Project-specific normalization rules, applied in order."
+    },
+    "signals": {
+      "$ref": "#/$defs/SignalsConfig",
+      "default": {
+        "error": [],
+        "success": []
+      },
+      "description": "Extra selectors that claim success or an error."
+    },
+    "signup": {
+      "$ref": "#/$defs/SignupConfig",
+      "default": {
+        "api": null
+      },
+      "description": "The request that creates an account when `create = \"api\"`."
+    },
+    "users": {
+      "default": [],
+      "description": "The test accounts, at least two per role (ADR-0019). Order is kept as written.",
+      "items": {
+        "$ref": "#/$defs/UserConfig"
+      },
+      "type": "array"
+    }
+  },
+  "title": "ProjectConfig",
+  "type": "object"
+}

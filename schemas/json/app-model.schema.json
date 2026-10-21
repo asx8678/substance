@@ -1,0 +1,360 @@
+{
+  "$defs": {
+    "Control": {
+      "additionalProperties": false,
+      "description": "One interactive control, with its selector candidates in preference order.",
+      "properties": {
+        "form": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Form"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The form the control belongs to, when it is in one."
+        },
+        "name": {
+          "description": "The accessible name.",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/ControlPurpose",
+          "description": "`login`, `logout`, `submit` or `action`."
+        },
+        "role": {
+          "description": "The ARIA role.",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The route the control is on.",
+          "type": "string"
+        },
+        "selectors": {
+          "description": "Selector candidates: role plus name first, then test ID, then CSS.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "screen",
+        "role",
+        "name",
+        "selectors",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "ControlPurpose": {
+      "description": "What a control is for.",
+      "oneOf": [
+        {
+          "const": "login",
+          "description": "The login control.",
+          "type": "string"
+        },
+        {
+          "const": "logout",
+          "description": "The logout control.",
+          "type": "string"
+        },
+        {
+          "const": "submit",
+          "description": "A form submit control.",
+          "type": "string"
+        },
+        {
+          "const": "action",
+          "description": "Anything else.",
+          "type": "string"
+        }
+      ]
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "description": "An entity inferred from JSON arrays and database tables.",
+      "properties": {
+        "fields": {
+          "description": "The field names, sorted.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id_field": {
+          "description": "The identifier field, when one was recognized.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "The entity name, usually the table or the JSON key.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "fields"
+      ],
+      "type": "object"
+    },
+    "Field": {
+      "additionalProperties": false,
+      "description": "One form field.",
+      "properties": {
+        "kind": {
+          "description": "`text`, `email`, `password`, `number`, `date`, `checkbox` or `select`.",
+          "type": "string"
+        },
+        "max": {
+          "description": "Maximum length or value, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "min": {
+          "description": "Minimum length or value, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "The field name.",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "The HTML `pattern`, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "description": "Whether the field is required.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "required"
+      ],
+      "type": "object"
+    },
+    "Form": {
+      "additionalProperties": false,
+      "description": "A form and its fields.",
+      "properties": {
+        "fields": {
+          "description": "Fields in document order.",
+          "items": {
+            "$ref": "#/$defs/Field"
+          },
+          "type": "array"
+        },
+        "selector": {
+          "description": "The form's selector.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selector",
+        "fields"
+      ],
+      "type": "object"
+    },
+    "Labels": {
+      "additionalProperties": false,
+      "description": "Selectors the agent layer labeled (M12); absent while the feature is off.",
+      "properties": {
+        "detail_screen": {
+          "description": "The route of the entity detail screen.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "list_screen": {
+          "description": "The route of the entity list screen.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "search_field": {
+          "description": "The search field selector.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success_signal": {
+          "description": "The success-signal selector.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "RequestTrigger": {
+      "additionalProperties": false,
+      "description": "Which control and step trigger which endpoint.",
+      "properties": {
+        "control": {
+          "description": "The control's selector.",
+          "type": "string"
+        },
+        "method": {
+          "description": "The HTTP method.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The path, with query parameters.",
+          "type": "string"
+        },
+        "screen": {
+          "description": "The route the control was used on.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "control",
+        "screen",
+        "method",
+        "path"
+      ],
+      "type": "object"
+    },
+    "Screen": {
+      "additionalProperties": false,
+      "description": "One route the crawl reached.",
+      "properties": {
+        "depth": {
+          "description": "Crawl depth from the entry point.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requires_auth": {
+          "description": "Whether the screen needs a session.",
+          "type": "boolean"
+        },
+        "route": {
+          "description": "The route template, for example `\"/invoices/:id\"`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route",
+        "depth",
+        "requires_auth"
+      ],
+      "type": "object"
+    },
+    "TestUser": {
+      "additionalProperties": false,
+      "description": "A test account: role and handle only, never a password.",
+      "properties": {
+        "handle": {
+          "description": "The handle from `[[users]]`.",
+          "type": "string"
+        },
+        "role": {
+          "description": "The role, for example `\"user\"` or `\"admin\"`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "handle"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Everything the crawler learned about the app at one commit.",
+  "properties": {
+    "cache_key": {
+      "description": "The cache key: commit SHA, config hash, master seed, rule-pack hash and driver\nversions, so a stale model is never reused (review issue 40).",
+      "type": "string"
+    },
+    "commit_sha": {
+      "description": "The commit the model describes.",
+      "type": "string"
+    },
+    "controls": {
+      "description": "Controls and forms in screen order.",
+      "items": {
+        "$ref": "#/$defs/Control"
+      },
+      "type": "array"
+    },
+    "entities": {
+      "description": "Entities inferred from responses and database tables.",
+      "items": {
+        "$ref": "#/$defs/Entity"
+      },
+      "type": "array"
+    },
+    "labels": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Labels"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Selectors the agent layer supplied, when the feature is on."
+    },
+    "requests": {
+      "description": "The request map: which callable triggers which endpoint.",
+      "items": {
+        "$ref": "#/$defs/RequestTrigger"
+      },
+      "type": "array"
+    },
+    "screens": {
+      "description": "Screens in crawl order.",
+      "items": {
+        "$ref": "#/$defs/Screen"
+      },
+      "type": "array"
+    },
+    "tables_touched": {
+      "description": "Tables the crawl wrote to, sorted.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "users": {
+      "description": "Test users per role; role and handle only, never secrets.",
+      "items": {
+        "$ref": "#/$defs/TestUser"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "commit_sha",
+    "cache_key",
+    "screens",
+    "controls",
+    "requests",
+    "entities",
+    "users",
+    "tables_touched"
+  ],
+  "title": "AppModel",
+  "type": "object"
+}
