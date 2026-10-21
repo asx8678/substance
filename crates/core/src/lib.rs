@@ -6,6 +6,7 @@
 
 pub mod check;
 pub mod clock;
+pub mod config;
 pub mod hash;
 pub mod ids;
 pub mod model;
@@ -15,6 +16,11 @@ pub use check::{
     Axis, CheckId, CheckStatus, Confidence, Family, GateRule, Level, Milestone, Need, Severity,
 };
 pub use clock::{Timestamp, wall_now_utc};
+pub use config::{
+    ApiRequest, AppConfig, Budgets, ChecksConfig, ConfigError, DbConfig, DbEngine, EgressConfig,
+    LoginConfig, LoginUi, MailConfig, NormalizeConfig, ProjectConfig, SignalsConfig, SignupConfig,
+    UserConfig, UserCreate,
+};
 pub use hash::{CanonicalJsonError, canonical_json, canonical_json_value};
 pub use ids::{BlobRef, FindingId, RecordId, RunId, SnapshotId};
 pub use model::{

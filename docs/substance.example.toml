@@ -1,0 +1,70 @@
+# Example `substance.toml` (M0-T05). Copy it to the repository root as `substance.toml`.
+# Every key is optional; the defaults are documented in crates/core/src/config.rs.
+# Secrets are named, never stored: only the *environment variable* that holds them appears here.
+
+[app]                         # explicit commands (boot ladder rung 2, ADR-0017)
+install = "npm ci"
+build = "npm run build"
+start = "npm start"           # long-running; substance sets the port variable
+migrate = "npx prisma migrate deploy"
+seed = "npx prisma db seed"
+port_env = "PORT"
+ready_path = "/"
+health_path = "/health"       # O06
+env = { NODE_ENV = "production" }
+
+[db]
+engine = "postgres"           # postgres | sqlite | supabase
+url_env = "DATABASE_URL"      # the variable the app reads
+sqlite_path = "prisma/dev.db"
+retained_tables = ["audit_log"]   # B25
+
+[[users]]                     # at least two per role (ADR-0019)
+role = "user"
+handle = "user_a"
+email = "a@example.test"
+password_env = "SUBSTANCE_USER_A_PASSWORD"   # secrets only by env var name
+create = "api"                # api | sql | supabase | ui | existing
+
+[[users]]
+role = "user"
+handle = "user_b"
+email = "b@example.test"
+password_env = "SUBSTANCE_USER_B_PASSWORD"
+create = "api"
+
+[login]                       # M4-T01; omit it to detect a single password form
+ui = { path = "/login", identifier = "input[name=email]", password = "input[type=password]", submit = "button[type=submit]" }
+# or: api = { method = "POST", path = "/api/login", body = '{"email":"{email}","password":"{password}"}' }
+
+[signup]
+api = { method = "POST", path = "/api/users", body = '{"user":{"email":"{email}","password":"{password}","username":"{handle}"}}' }
+
+[mail]
+env = { SMTP_HOST = "{smtp_host}", SMTP_PORT = "{smtp_port}" }
+
+[signals]                     # extra success/error selectors (stand-in for agent labels)
+success = []
+error = []
+
+[normalize]
+patterns = [{ regex = "inv-[0-9]{6}", replace = "<invoice-no>" }]
+
+[egress]
+allow = []                    # hosts allowed at runtime
+
+[budgets]
+triage_s = 120
+run_s = 1800
+settle_quiet_ms = 500
+settle_timeout_ms = 10000
+idle_baseline_ms = 5000
+shutdown_grace_s = 30
+crawl_max_screens = 200
+crawl_max_actions = 2000
+crawl_max_depth = 6
+blame_max_files = 5000
+forge_max_requests = 3000
+
+[checks]
+disable = []                  # reported as not_measured("disabled by config")

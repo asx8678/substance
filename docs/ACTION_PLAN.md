@@ -2206,7 +2206,7 @@ Tick each task in the same commit that completes it.
 - [x] M0-T02 ADRs
 - [x] M0-T03 Core IDs and registry
 - [x] M0-T04 Core data model
-- [ ] M0-T05 Project config
+- [x] M0-T05 Project config
 - [ ] M0-T06 CLI skeleton
 - [ ] M0-T07 Schema and TS generation
 - [ ] M0-T08 Orchestrator, run dir, report v0
