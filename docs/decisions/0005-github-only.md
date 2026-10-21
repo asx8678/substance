@@ -17,6 +17,9 @@ API's quirks.
 - A non-GitHub origin, whether a GitLab remote or no remote at all, returns
   `ForgeUnavailable`, so forge-dependent checks report
   `not_measured("forge unsupported")`.
+- REST only. GraphQL would save requests where a collection needs one call per item, but
+  it needs a token even for a public repository, and the token is optional here; REST
+  costs more of the `forge_max_requests` budget and works anonymously.
 
 ## Consequences
 

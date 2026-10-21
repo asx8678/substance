@@ -113,24 +113,56 @@ impl SnapshotKind {
     }
 }
 
+/// The accept type GitHub answers plain JSON with.
+pub const JSON_ACCEPT: &str = "application/vnd.github+json";
+
 /// A request whose response is worth keeping.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// The fields are private to this module on purpose: `auth` is the one secret the pipeline
+/// handles, so the only ways to set it are [`SnapshotRequest::with_auth`], which takes it
+/// by value, and the redacted [`std::fmt::Debug`] impl below, which prints a marker
+/// instead of the value.
 pub struct SnapshotRequest {
-    /// Which kind of data this is.
-    pub kind: SnapshotKind,
-    /// The HTTP method.
-    pub method: String,
-    /// The absolute URL.
-    pub url: String,
-    /// The request body, empty for a GET.
-    pub body: String,
-    /// The credential to send, never saved. Live mode reads it from the environment; the
-    /// replay path never sees it.
-    pub auth: Option<String>,
+    kind: SnapshotKind,
+    method: String,
+    url: String,
+    body: String,
+    accept: String,
+    headers: BTreeMap<String, String>,
+    auth: Option<String>,
 }
 
+impl std::fmt::Debug for SnapshotRequest {
+    /// Prints the request without its credential, so a log line or an error message can
+    /// name the request and cannot carry the token.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SnapshotRequest")
+            .field("kind", &self.kind)
+            .field("method", &self.method)
+            .field("url", &self.url)
+            .field("body", &self.body)
+            .field("accept", &self.accept)
+            .field("headers", &self.headers)
+            .field("auth", &self.auth.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
+impl PartialEq for SnapshotRequest {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+            && self.method == other.method
+            && self.url == other.url
+            && self.body == other.body
+            && self.accept == other.accept
+    }
+}
+
+impl Eq for SnapshotRequest {}
+
 impl SnapshotRequest {
-    /// A GET with no credential.
+    /// A GET with no credential, asking for JSON.
     #[must_use]
     pub fn get(kind: SnapshotKind, url: &str) -> Self {
         Self {
@@ -138,8 +170,32 @@ impl SnapshotRequest {
             method: "GET".to_owned(),
             url: url.to_owned(),
             body: String::new(),
+            accept: JSON_ACCEPT.to_owned(),
+            headers: BTreeMap::new(),
             auth: None,
         }
+    }
+
+    /// Asks for a different media type, such as `application/vnd.github.star+json`.
+    ///
+    /// The type is not part of the snapshot key: GitHub's plain and starred responses
+    /// differ only by an extra field, so a replay of a run that asked for stars answers a
+    /// later plain request with the same document.
+    #[must_use]
+    pub fn with_accept(mut self, accept: &str) -> Self {
+        self.accept = accept.to_owned();
+        self
+    }
+
+    /// Adds a request header, such as the API version GitHub asks clients to pin.
+    ///
+    /// Request headers are never saved — only the response's allowlisted headers are — so
+    /// this cannot put anything on disk. An unencodable header fails the request rather
+    /// than being dropped.
+    #[must_use]
+    pub fn with_header(mut self, name: &str, value: &str) -> Self {
+        self.headers.insert(name.to_owned(), value.to_owned());
+        self
     }
 
     /// Adds a credential, which live mode sends and no file records.
@@ -394,7 +450,22 @@ impl SnapshotHttp {
             .client
             .request(method, &request.url)
             .timeout(REQUEST_TIMEOUT);
-        builder = builder.header(reqwest::header::ACCEPT, "application/json");
+        builder = builder.header(reqwest::header::ACCEPT, request.accept.as_str());
+        for (name, value) in &request.headers {
+            let name = reqwest::header::HeaderName::from_bytes(name.as_bytes()).map_err(|_| {
+                SnapshotError::Request {
+                    url: request.url.clone(),
+                    detail: "a request header name is not valid".to_owned(),
+                }
+            })?;
+            let value = reqwest::header::HeaderValue::from_str(value).map_err(|_| {
+                SnapshotError::Request {
+                    url: request.url.clone(),
+                    detail: format!("the request header {name} has an invalid value"),
+                }
+            })?;
+            builder = builder.header(name, value);
+        }
         if !request.body.is_empty() {
             builder = builder.body(request.body.clone());
         }

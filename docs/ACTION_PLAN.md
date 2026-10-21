@@ -2213,7 +2213,7 @@ Tick each task in the same commit that completes it.
 - [x] M0-T09 CI workflow
 - [x] M1-T01 Tool runner and external snapshots
 - [x] M1-T02 Git engine
-- [ ] M1-T03 GitHub forge
+- [x] M1-T03 GitHub forge
 - [ ] M1-T04 Registries and lockfiles
 - [ ] M1-T05 H01–H10
 - [ ] M1-T06 H11–H22, archetypes, thresholds
