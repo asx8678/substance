@@ -18,10 +18,10 @@
 //!   the wall clock, so the same run replays to the same URL. The clients take `as_of` for
 //!   exactly this reason.
 //!
-//! - **A capped document says so.** npm's packument holds every version ever published; a
-//!   package with 2,000 releases would otherwise dominate a report. The version list is
-//!   capped (newest first, since that is what P02–P04 ask about) and the cap is recorded in
-//!   [`Registry::notes`].
+//! - **A long version list says so.** npm's packument holds every version ever published. The
+//!   clients keep them all (P02 and P03 read every release) and [`MAX_VERSIONS`] bounds what a
+//!   report shows; when a list exceeds it, [`Registry::notes`] carries the sentence saying so,
+//!   so a reader knows the report shows a sample.
 //!
 //! - **A missing document is a typed gap, not an error.** A 404 means the package does not
 //!   exist — which is itself P02's strongest signal — and answers
@@ -57,12 +57,13 @@ pub use npm::{NPM_API, NPM_DOWNLOADS_API, Npm, NpmPackage, NpmVersion};
 pub use pypi::{PYPI_API, PyPI, PyPiPackage, PyPiRelease};
 pub use support::Documents;
 
-/// How many versions of one package are kept.
+/// How many versions of one package a report shows.
 ///
-/// Newest first: P02 asks whether a version was published days before the project adopted
-/// it, P03 whether the version in use was already outdated, and P04 whether a release was
-/// yanked. All three look at the recent end, so the oldest releases are the ones a cap may
-/// drop. 500 versions is more than any package a project would depend on.
+/// A report limit, not a parsing limit (M1-T10). The clients keep every version a registry
+/// returns, because P02 asks how many exist and P03 asks what the newest release was on the
+/// day a dependency was adopted: questions about the whole list. Storing two thousand version
+/// strings for one package would dominate a report, so the payload that lists versions shows
+/// the newest 500, and the note recorded beside it says the list was longer.
 pub const MAX_VERSIONS: usize = 500;
 
 /// How many days the npm downloads query covers.

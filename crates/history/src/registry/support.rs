@@ -82,10 +82,12 @@ impl Documents {
         self.skipped.sort_by(|left, right| left.0.cmp(&right.0));
     }
 
-    /// Records that a version list stopped at [`MAX_VERSIONS`].
-    pub fn note_version_cap(&mut self, package: &str, kept: usize, total: usize) {
-        let note =
-            format!("{package}: kept the newest {kept} of {total} versions (cap {MAX_VERSIONS})");
+    /// Records that a version list is longer than a report shows.
+    pub fn note_version_cap(&mut self, package: &str, shown: usize, total: usize) {
+        let note = format!(
+            "{package}: {total} versions exist; a report shows the newest {shown} (the checks \
+             read all of them)"
+        );
         self.note(note);
     }
 
@@ -111,19 +113,23 @@ impl Documents {
     }
 }
 
-/// Keeps the newest `MAX_VERSIONS` entries of a newest-first list, recording the cap.
+/// Passes a newest-first version list through, recording when it is longer than the cap.
 ///
 /// The caller must pass the list newest first; each client sorts by publish date before
 /// calling this, because npm's `versions` object, PyPI's `releases` map and crates.io's
 /// `versions` array all have their own order.
+///
+/// The list is **not** truncated (M1-T10). P02 asks how many versions a package has and P03
+/// asks what the newest release was on the day a dependency was adopted; both are questions
+/// about the whole list, so a list cut at the newest [`MAX_VERSIONS`] would answer them with
+/// numbers that look measured and are not. The cap is a report limit: the note recorded here
+/// says the list is longer than one, and the report shows the newest [`MAX_VERSIONS`].
 #[must_use]
-pub fn cap_versions<T>(package: &str, mut versions: Vec<T>, documents: &mut Documents) -> Vec<T> {
+pub fn seen_versions<T>(package: &str, versions: Vec<T>, documents: &mut Documents) -> Vec<T> {
     let total = versions.len();
-    if total <= MAX_VERSIONS {
-        return versions;
+    if total > MAX_VERSIONS {
+        documents.note_version_cap(package, MAX_VERSIONS, total);
     }
-    versions.truncate(MAX_VERSIONS);
-    documents.note_version_cap(package, versions.len(), total);
     versions
 }
 

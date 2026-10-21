@@ -17,7 +17,7 @@ use serde::Deserialize;
 use substance_core::Timestamp;
 use substance_core::deps::Ecosystem;
 
-use super::support::{Documents, cap_versions, skipped_of};
+use super::support::{Documents, seen_versions, skipped_of};
 use super::{Registry, RegistryError};
 use crate::snapshot::SnapshotHttp;
 
@@ -51,7 +51,8 @@ pub struct NpmPackage {
     pub modified_at: Option<Timestamp>,
     /// The source repository URL, when the package declares one.
     pub repository: Option<String>,
-    /// The versions, newest first, capped at [`super::MAX_VERSIONS`].
+    /// The versions, newest first. A long list is kept whole (M1-T10): P02 and P03 read
+    /// every release, and a report shows the newest [`super::MAX_VERSIONS`].
     pub versions: Vec<NpmVersion>,
     /// The license, as the package declares it.
     pub license: Option<String>,
@@ -79,16 +80,16 @@ impl NpmPackage {
 
 /// The npm client.
 #[derive(Debug)]
-pub struct Npm {
-    http: SnapshotHttp,
+pub struct Npm<'a> {
+    http: &'a mut SnapshotHttp,
     documents: Documents,
     as_of: Timestamp,
 }
 
-impl Npm {
+impl<'a> Npm<'a> {
     /// A client over `http`, whose downloads window ends at `as_of`.
     #[must_use]
-    pub fn new(http: SnapshotHttp, as_of: Timestamp) -> Self {
+    pub fn new(http: &'a mut SnapshotHttp, as_of: Timestamp) -> Self {
         Self {
             http,
             documents: Documents::new(),
@@ -123,7 +124,7 @@ impl Npm {
         let url = Self::packument_url(name);
         let text = self
             .documents
-            .get(&mut self.http, Ecosystem::Npm, name, &url)
+            .get(self.http, Ecosystem::Npm, name, &url)
             .await?;
         let wire: WirePackument =
             serde_json::from_str(&text).map_err(|error| RegistryError::Schema {
@@ -153,7 +154,7 @@ impl Npm {
                 .cmp(&left.published_at)
                 .then_with(|| right.version.cmp(&left.version))
         });
-        let versions = cap_versions(name, versions, &mut self.documents);
+        let versions = seen_versions(name, versions, &mut self.documents);
         Ok(NpmPackage {
             name: wire.name.unwrap_or_else(|| name.to_owned()),
             latest: wire.dist_tags.and_then(|tags| tags.latest),
@@ -180,7 +181,7 @@ impl Npm {
         let url = Self::downloads_url(name, self.as_of);
         let text = self
             .documents
-            .get(&mut self.http, Ecosystem::Npm, name, &url)
+            .get(self.http, Ecosystem::Npm, name, &url)
             .await?;
         let wire: WireDownloads =
             serde_json::from_str(&text).map_err(|error| RegistryError::Schema {
@@ -198,7 +199,7 @@ impl Npm {
     }
 }
 
-impl Registry for Npm {
+impl Registry for Npm<'_> {
     fn ecosystem(&self) -> Ecosystem {
         Ecosystem::Npm
     }

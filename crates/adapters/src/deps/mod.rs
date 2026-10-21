@@ -189,6 +189,24 @@ impl ManifestDeps {
         self.direct.is_empty() && self.dev.is_empty()
     }
 
+    /// Adds another manifest's names to this one, keeping both lists sorted and unique.
+    ///
+    /// A project can declare dependencies in more than one file of the same ecosystem — a
+    /// Python project with a pyproject.toml and a requirements.txt, say — and the dependency
+    /// checks ask one question per ecosystem. Merging here keeps the two lists' invariants
+    /// (sorted, deduplicated) in the type that owns them, rather than at each call site.
+    pub fn merge(&mut self, other: Self) {
+        self.direct.extend(other.direct);
+        self.direct.sort_unstable();
+        self.direct.dedup();
+        self.dev.extend(other.dev);
+        self.dev.sort_unstable();
+        self.dev.dedup();
+        // A name cannot be both: a runtime dependency listed in a dev file is runtime, which
+        // is the same precedence `classify` gives the manifest over the lockfile.
+        self.dev.retain(|name| !self.direct.contains(name));
+    }
+
     /// Reads a `package.json`: `dependencies` is runtime, `devDependencies` development,
     /// and `optionalDependencies`/`peerDependencies` are neither asked for nor installed by
     /// the project itself, so they count as direct runtime names only when nothing else

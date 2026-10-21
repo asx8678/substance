@@ -1,0 +1,109 @@
+# Overlap groups (M1-T10, P05). Data, not code.
+#
+# Each group names a problem several packages solve. When a project depends directly on two or
+# more packages from one group for the same language, P05 reports it: two HTTP clients, two date
+# libraries, two state managers is the signature of code nobody decided how to write.
+#
+# language   the ecosystem the group applies to: ts, python or rust. A `requests` in a group
+#            that says `python` never fires on a Rust project.
+# name       what the group is about, printed in the finding.
+# packages   the packages. Sorted, and written the way each registry spells them.
+#
+# A group needs at least two packages present to fire, so a project using exactly one HTTP
+# client is never accused of overlapping.
+
+[[group]]
+language = "ts"
+name = "http-client"
+packages = [
+  "axios",
+  "got",
+  "node-fetch",
+  "ofetch",
+  "request",
+  "superagent",
+  "undici",
+]
+
+[[group]]
+language = "ts"
+name = "date-library"
+packages = [
+  "@js-joda/core",
+  "date-fns",
+  "dayjs",
+  "luxon",
+  "moment",
+]
+
+[[group]]
+language = "ts"
+name = "state-manager"
+packages = [
+  "@reduxjs/toolkit",
+  "jotai",
+  "mobx",
+  "pinia",
+  "recoil",
+  "redux",
+  "vuex",
+  "zustand",
+]
+
+[[group]]
+language = "python"
+name = "http-client"
+packages = [
+  "aiohttp",
+  "httpx",
+  "requests",
+  "urllib3",
+]
+
+[[group]]
+language = "python"
+name = "date-library"
+packages = [
+  "arrow",
+  "dateutil",
+  "pendulum",
+  "python-dateutil",
+]
+
+[[group]]
+language = "python"
+name = "dotenv"
+packages = [
+  "dotenv",
+  "python-dotenv",
+]
+
+[[group]]
+language = "rust"
+name = "http-client"
+packages = [
+  "attohttpc",
+  "hyper",
+  "isahc",
+  "reqwest",
+  "surf",
+  "ureq",
+]
+
+[[group]]
+language = "rust"
+name = "async-runtime"
+packages = [
+  "async-std",
+  "smol",
+  "tokio",
+]
+
+[[group]]
+language = "rust"
+name = "date-library"
+packages = [
+  "chrono",
+  "jiff",
+  "time",
+]

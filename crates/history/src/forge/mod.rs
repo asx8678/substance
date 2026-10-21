@@ -326,6 +326,16 @@ pub struct RepoInfo {
     pub default_branch: Option<String>,
     /// The licence's SPDX identifier, when GitHub detected one.
     pub license: Option<String>,
+    /// Whether the repository is archived, which is the forge's own "abandoned" flag.
+    ///
+    /// P07 reads it as the strongest vitality signal: an archived repository is one its owner
+    /// has declared finished, whatever its commit dates say.
+    pub archived: bool,
+    /// When anything last landed on any branch, as the forge records it.
+    ///
+    /// P07 reads this as "has anyone pushed recently": it is one field of the repository
+    /// document, so the answer costs no request of its own.
+    pub pushed_at: Option<Timestamp>,
 }
 
 /// One workflow run, for the CI-status and fix-chain checks.
@@ -564,6 +574,18 @@ pub trait Forge: Send + Sync {
     ///
     /// See [`ForgeError`].
     async fn compare(&mut self, base: &str, head: &str) -> Result<Compare, ForgeError>;
+
+    /// When the newest commit on the default branch was authored, for P07's vitality.
+    ///
+    /// The repository document carries `pushed_at`, which moves when any branch is pushed —
+    /// including a stale feature branch. This asks the narrower question directly, with one
+    /// request for one commit (`GET /repos/{owner}/{repo}/commits?per_page=1`), and answers
+    /// `None` for an empty repository rather than inventing a date.
+    ///
+    /// # Errors
+    ///
+    /// See [`ForgeError`]. A repository with no commits answers `Ok(None)`.
+    async fn last_commit(&mut self) -> Result<Option<Timestamp>, ForgeError>;
 
     /// How many requests have been spent so far.
     fn requests_used(&self) -> u32;

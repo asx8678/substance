@@ -91,6 +91,16 @@ pub struct HistoryThresholds {
     /// T06: the share of today's test lines that may arrive after that instant before the
     /// check fails, in permille.
     pub t06_late_tests_permille: Option<u32>,
+    /// P02: npm's monthly downloads below which a package counts as unpopular (M1-T10).
+    pub p02_min_monthly_downloads: Option<u32>,
+    /// P02: how few published versions make a package too new to judge (M1-T10).
+    pub p02_min_versions: Option<u32>,
+    /// P03: the share of dependencies that arrived already a major version behind, in
+    /// permille, at which the check fails (M1-T10).
+    pub p03_stale_permille: Option<u32>,
+    /// P05: direct dependencies per 1,000 authored lines above which the project is bloated
+    /// (M1-T10). Absent until the corpora set it (ADR-0016), so P05 reports its rate.
+    pub p05_max_dependencies_per_1000_lines: Option<u32>,
     /// H22: the archetype cut-offs.
     #[serde(default)]
     pub archetypes: ArchetypeThresholds,

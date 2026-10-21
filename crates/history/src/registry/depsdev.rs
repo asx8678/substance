@@ -39,15 +39,15 @@ pub struct Dependents {
 
 /// The deps.dev client.
 #[derive(Debug)]
-pub struct DepsDev {
-    http: SnapshotHttp,
+pub struct DepsDev<'a> {
+    http: &'a mut SnapshotHttp,
     documents: Documents,
 }
 
-impl DepsDev {
+impl<'a> DepsDev<'a> {
     /// A client over `http`.
     #[must_use]
-    pub fn new(http: SnapshotHttp) -> Self {
+    pub fn new(http: &'a mut SnapshotHttp) -> Self {
         Self {
             http,
             documents: Documents::new(),
@@ -83,10 +83,7 @@ impl DepsDev {
         name: &str,
     ) -> Result<Vec<String>, RegistryError> {
         let url = Self::package_url(ecosystem, name);
-        let text = self
-            .documents
-            .get(&mut self.http, ecosystem, name, &url)
-            .await?;
+        let text = self.documents.get(self.http, ecosystem, name, &url).await?;
         let wire: WirePackage =
             serde_json::from_str(&text).map_err(|error| RegistryError::Schema {
                 ecosystem,
@@ -119,7 +116,7 @@ impl DepsDev {
         let label = format!("{name}@{version}");
         let text = self
             .documents
-            .get(&mut self.http, ecosystem, &label, &url)
+            .get(self.http, ecosystem, &label, &url)
             .await?;
         let wire: WireDependents =
             serde_json::from_str(&text).map_err(|error| RegistryError::Schema {
@@ -148,7 +145,7 @@ impl DepsDev {
     }
 }
 
-impl Registry for DepsDev {
+impl Registry for DepsDev<'_> {
     fn ecosystem(&self) -> Ecosystem {
         // deps.dev answers for all three, so the trait's ecosystem is the one it was asked
         // about last; a report names the ecosystem on each record instead.

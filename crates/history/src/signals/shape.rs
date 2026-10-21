@@ -29,6 +29,12 @@ pub struct Judgment {
     pub evidence: Vec<Evidence>,
     /// Sentences a reader needs to interpret the numbers, for example a cap the sample hit.
     pub notes: Vec<String>,
+    /// Per-part verdicts, sorted by key (M1-T10).
+    ///
+    /// A check with several independent sources needs them: P01's verdict rests on whichever
+    /// scanners ran, and a reader must be able to see that `pip-audit` was missing without
+    /// reading the notes. A check with one source leaves this empty.
+    pub parts: BTreeMap<String, Verdict>,
 }
 
 impl Judgment {
@@ -40,6 +46,7 @@ impl Judgment {
             metrics,
             evidence: Vec::new(),
             notes: Vec::new(),
+            parts: BTreeMap::new(),
         }
     }
 
@@ -56,6 +63,7 @@ impl Judgment {
             metrics,
             evidence: Vec::new(),
             notes: Vec::new(),
+            parts: BTreeMap::new(),
         }
     }
 
@@ -69,6 +77,7 @@ impl Judgment {
             metrics,
             evidence: Vec::new(),
             notes: Vec::new(),
+            parts: BTreeMap::new(),
         }
     }
 

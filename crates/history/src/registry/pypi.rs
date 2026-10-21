@@ -18,7 +18,7 @@ use serde::Deserialize;
 use substance_core::Timestamp;
 use substance_core::deps::Ecosystem;
 
-use super::support::{Documents, cap_versions, skipped_of};
+use super::support::{Documents, seen_versions, skipped_of};
 use super::{Registry, RegistryError};
 use crate::snapshot::SnapshotHttp;
 
@@ -49,7 +49,8 @@ pub struct PyPiPackage {
     pub repository: Option<String>,
     /// The license text or expression.
     pub license: Option<String>,
-    /// The releases, newest first, capped at [`super::MAX_VERSIONS`].
+    /// The releases, newest first. A long list is kept whole (M1-T10): P02 and P03 read
+    /// every release, and a report shows the newest [`super::MAX_VERSIONS`].
     pub releases: Vec<PyPiRelease>,
 }
 
@@ -63,15 +64,15 @@ impl PyPiPackage {
 
 /// The PyPI client.
 #[derive(Debug)]
-pub struct PyPI {
-    http: SnapshotHttp,
+pub struct PyPI<'a> {
+    http: &'a mut SnapshotHttp,
     documents: Documents,
 }
 
-impl PyPI {
+impl<'a> PyPI<'a> {
     /// A client over `http`.
     #[must_use]
-    pub fn new(http: SnapshotHttp) -> Self {
+    pub fn new(http: &'a mut SnapshotHttp) -> Self {
         Self {
             http,
             documents: Documents::new(),
@@ -93,7 +94,7 @@ impl PyPI {
         let url = Self::package_url(name);
         let text = self
             .documents
-            .get(&mut self.http, Ecosystem::PyPi, name, &url)
+            .get(self.http, Ecosystem::PyPi, name, &url)
             .await?;
         let wire: WireProject =
             serde_json::from_str(&text).map_err(|error| RegistryError::Schema {
@@ -134,7 +135,7 @@ impl PyPI {
                 .cmp(&left.uploaded_at)
                 .then_with(|| right.version.cmp(&left.version))
         });
-        let releases = cap_versions(name, releases, &mut self.documents);
+        let releases = seen_versions(name, releases, &mut self.documents);
         let mut info = wire.info.unwrap_or_default();
         let repository = info.repository();
         Ok(PyPiPackage {
@@ -156,7 +157,7 @@ impl PyPI {
     }
 }
 
-impl Registry for PyPI {
+impl Registry for PyPI<'_> {
     fn ecosystem(&self) -> Ecosystem {
         Ecosystem::PyPi
     }

@@ -579,11 +579,30 @@ struct WireLicense {
 #[derive(Debug, Deserialize)]
 struct WireRepo {
     created_at: Option<String>,
+    archived: Option<bool>,
+    pushed_at: Option<String>,
     fork: Option<bool>,
     parent: Option<WireRepoName>,
     template_repository: Option<WireRepoName>,
     default_branch: Option<String>,
     license: Option<WireLicense>,
+}
+
+/// One entry of a commit listing: P07 reads only its dates.
+#[derive(Debug, Deserialize)]
+struct WireCommitEntry {
+    commit: Option<WireCommitDetail>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WireCommitDetail {
+    author: Option<WireCommitStamp>,
+    committer: Option<WireCommitStamp>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WireCommitStamp {
+    date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -758,6 +777,8 @@ impl Forge for GitHub {
                 .template_repository
                 .and_then(|template| repo_ref(template.full_name.as_deref())),
             default_branch: wire.default_branch,
+            archived: wire.archived.unwrap_or(false),
+            pushed_at: timestamp(wire.pushed_at.as_deref()),
             license: wire
                 .license
                 .and_then(|license| license.spdx_id)
@@ -1004,6 +1025,30 @@ impl Forge for GitHub {
             newest_first(left.created_at, right.created_at).then_with(|| right.id.cmp(&left.id))
         });
         Ok(releases)
+    }
+
+    async fn last_commit(&mut self) -> Result<Option<Timestamp>, ForgeError> {
+        // One commit, newest first: the whole question is its date. `per_page=1` is what keeps
+        // this from paging through a repository's history for a number the first page answers.
+        let url = self.repo_url("/commits?per_page=1");
+        match self.fetch_one::<WireCommitEntry>("commits", url).await {
+            Ok(wire) => Ok(timestamp(
+                wire.commit
+                    .as_ref()
+                    .and_then(|commit| commit.committer.as_ref())
+                    .and_then(|who| who.date.as_deref())
+                    .or_else(|| {
+                        wire.commit
+                            .as_ref()
+                            .and_then(|commit| commit.author.as_ref())
+                            .and_then(|who| who.date.as_deref())
+                    }),
+            )),
+            // An empty repository answers 409 or 404 with no commits; that is not an error
+            // about the request, it is the answer "nothing has ever been committed here".
+            Err(ForgeError::NotFound { .. }) => Ok(None),
+            Err(other) => Err(other),
+        }
     }
 
     async fn tags(&mut self) -> Result<Vec<Tag>, ForgeError> {

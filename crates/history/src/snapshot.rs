@@ -323,13 +323,20 @@ pub enum SnapshotError {
 }
 
 /// Saves and replays external responses for one run.
+///
+/// Cloning it gives another handle onto the **same** budget: the counter lives behind an
+/// `Arc<AtomicU32>`, so every handle a run hands out — the registry clients', the forge
+/// client's — spends from one `forge_max_requests` cap. A clone with its own counter would
+/// have let each client spend the whole budget, which is the failure this type exists to
+/// prevent. An atomic rather than a `Cell` because [`Forge`](crate::forge::Forge) requires
+/// `Send + Sync`.
 #[derive(Debug, Clone)]
 pub struct SnapshotHttp {
     client: reqwest::Client,
     root: PathBuf,
     as_of: Timestamp,
     budget: u32,
-    used: u32,
+    used: std::sync::Arc<std::sync::atomic::AtomicU32>,
     replay: bool,
 }
 
@@ -346,7 +353,7 @@ impl SnapshotHttp {
             root: root.to_path_buf(),
             as_of,
             budget,
-            used: 0,
+            used: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
             replay: false,
         })
     }
@@ -371,7 +378,7 @@ impl SnapshotHttp {
                 }
             })?,
             budget: 0,
-            used: 0,
+            used: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
             replay: true,
         })
     }
@@ -385,7 +392,7 @@ impl SnapshotHttp {
     /// How many requests have been made so far.
     #[must_use]
     pub fn used(&self) -> u32 {
-        self.used
+        self.used.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Fetches `request`, or replays it, in that order.
@@ -406,13 +413,17 @@ impl SnapshotHttp {
         if self.replay {
             return read_response(&path, request);
         }
-        if self.used >= self.budget {
+        // A fetch takes `&mut self`, so no two requests race; the ordering only has to make
+        // the count visible to the other handles, which relaxed ordering does.
+        let used = self.used.load(std::sync::atomic::Ordering::Relaxed);
+        if used >= self.budget {
             return Err(SnapshotError::BudgetExhausted {
-                used: self.used,
+                used,
                 budget: self.budget,
             });
         }
-        self.used += 1;
+        self.used
+            .store(used.saturating_add(1), std::sync::atomic::Ordering::Relaxed);
         let response = self.fetch_with_retries(request).await?;
         write_response(&path, &response)?;
         Ok(response)

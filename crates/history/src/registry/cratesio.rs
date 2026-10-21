@@ -16,7 +16,7 @@ use serde::Deserialize;
 use substance_core::Timestamp;
 use substance_core::deps::Ecosystem;
 
-use super::support::{Documents, cap_versions, skipped_of};
+use super::support::{Documents, seen_versions, skipped_of};
 use super::{Registry, RegistryError};
 use crate::snapshot::SnapshotHttp;
 
@@ -45,21 +45,22 @@ pub struct Crate {
     pub repository: Option<String>,
     /// All-time downloads.
     pub downloads: u64,
-    /// The versions, newest first, capped at [`super::MAX_VERSIONS`].
+    /// The versions, newest first. A long list is kept whole (M1-T10): P02 and P03 read
+    /// every release, and a report shows the newest [`super::MAX_VERSIONS`].
     pub versions: Vec<CrateVersion>,
 }
 
 /// The crates.io client.
 #[derive(Debug)]
-pub struct CratesIo {
-    http: SnapshotHttp,
+pub struct CratesIo<'a> {
+    http: &'a mut SnapshotHttp,
     documents: Documents,
 }
 
-impl CratesIo {
+impl<'a> CratesIo<'a> {
     /// A client over `http`.
     #[must_use]
-    pub fn new(http: SnapshotHttp) -> Self {
+    pub fn new(http: &'a mut SnapshotHttp) -> Self {
         Self {
             http,
             documents: Documents::new(),
@@ -81,7 +82,7 @@ impl CratesIo {
         let url = Self::crate_url(name);
         let text = self
             .documents
-            .get(&mut self.http, Ecosystem::Crates, name, &url)
+            .get(self.http, Ecosystem::Crates, name, &url)
             .await?;
         let wire: WireCrate =
             serde_json::from_str(&text).map_err(|error| RegistryError::Schema {
@@ -110,7 +111,7 @@ impl CratesIo {
                 .cmp(&left.created_at)
                 .then_with(|| right.version.cmp(&left.version))
         });
-        let versions = cap_versions(name, versions, &mut self.documents);
+        let versions = seen_versions(name, versions, &mut self.documents);
         let meta = wire.krate.unwrap_or_default();
         Ok(Crate {
             name: meta.name.unwrap_or_else(|| name.to_owned()),
@@ -131,7 +132,7 @@ impl CratesIo {
     }
 }
 
-impl Registry for CratesIo {
+impl Registry for CratesIo<'_> {
     fn ecosystem(&self) -> Ecosystem {
         Ecosystem::Crates
     }

@@ -1,0 +1,63 @@
+# Licence obligations and the compatibility matrix (M1-T10, P06). Data, not code.
+#
+# P06 reads two things from this file:
+#
+#   [obligations]   SPDX identifier -> what the licence obliges the project that depends on it
+#   [[incompatible]] pairs the matrix refuses, as (project, dependency)
+#
+# The three classes are the ones a dependency check can act on:
+#
+#   permissive       attribution only; the project keeps its own licence
+#   weak_copyleft    conditions attach to the files that use the package, not to the project
+#   strong_copyleft  conditions attach to the whole project
+#
+# An identifier that is not listed is `unknown`: P06 reports it instead of assuming it is
+# permissive, because assuming is how a licence problem ships.
+#
+# A licence expression (`MIT OR Apache-2.0`) is read as its first identifier: a package that
+# offers a choice lets the project take the permissive one, and reading the strictest would
+# accuse a dual-licensed package of the licence nobody chose.
+
+[obligations]
+"0BSD" = "permissive"
+"Apache-2.0" = "permissive"
+"BSD-2-Clause" = "permissive"
+"BSD-3-Clause" = "permissive"
+"BSL-1.0" = "permissive"
+"CC0-1.0" = "permissive"
+"ISC" = "permissive"
+"MIT" = "permissive"
+"MIT-0" = "permissive"
+"Unlicense" = "permissive"
+"Zlib" = "permissive"
+
+"EPL-2.0" = "weak_copyleft"
+"LGPL-2.1-only" = "weak_copyleft"
+"LGPL-2.1-or-later" = "weak_copyleft"
+"LGPL-3.0-only" = "weak_copyleft"
+"LGPL-3.0-or-later" = "weak_copyleft"
+"MPL-2.0" = "weak_copyleft"
+
+"AGPL-3.0-only" = "strong_copyleft"
+"AGPL-3.0-or-later" = "strong_copyleft"
+"GPL-2.0-only" = "strong_copyleft"
+"GPL-2.0-or-later" = "strong_copyleft"
+"GPL-3.0-only" = "strong_copyleft"
+"GPL-3.0-or-later" = "strong_copyleft"
+"SSPL-1.0" = "strong_copyleft"
+
+# The pairs that make a project unable to ship under its own licence. A permissive or
+# weak-copyleft project can carry a strong-copyleft dependency only by relicensing the whole
+# work, which is a decision for a person, not a check. A strong-copyleft project carrying
+# anything is fine: its licence already obliges more than the dependency's.
+[[incompatible]]
+project = "permissive"
+dependency = "strong_copyleft"
+
+[[incompatible]]
+project = "weak_copyleft"
+dependency = "strong_copyleft"
+
+# `unknown` on either side is not listed: P06 flags an unclassified dependency licence on its
+# own, and a project whose own licence this build cannot read is reported as unjudged rather
+# than compared against a guess.

@@ -5,6 +5,7 @@
 //! directory and can be replayed with `--snapshot-from`.
 
 pub mod dates;
+pub mod deps;
 pub mod forge;
 pub mod git;
 pub mod registry;

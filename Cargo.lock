@@ -2142,11 +2142,13 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "substance-adapters",
  "substance-core",
  "substance-runner",
  "thiserror",
  "time",
  "tokio",
+ "toml 1.1.8+spec-1.1.0",
  "tracing",
 ]
 

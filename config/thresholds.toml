@@ -58,6 +58,22 @@ person_day_min_active_days = 14
 t06_code_share_permille = 800
 t06_late_tests_permille = 700
 
+# P02: npm's monthly downloads and how few published versions make a dependency
+# unpopular. The plan's own numbers: a package nobody downloads and that has almost no
+# releases is either new or nobody's. Both are judged together, per package.
+p02_min_monthly_downloads = 1000
+p02_min_versions = 3
+
+# P03: the share of direct dependencies that arrived already a major version behind the
+# newest release that existed on the day the project adopted them, in permille. The plan's
+# number: at half the dependencies, the project never started current.
+p03_stale_permille = 500
+
+# P05: direct dependencies per 1,000 authored lines above which a project is carrying more
+# surface than its code justifies. Absent until the benchmark corpora set it (ADR-0016), so
+# P05 reports its rate and still fails on overlap or unused dependencies.
+# p05_max_dependencies_per_1000_lines = 20
+
 # The archetype cut-offs H22 applies, in the plan's order: one-shot dump, burst then
 # abandoned, team maintained, solo maintained, young and iterating. A rule with a missing
 # number cannot match, and H22 names the number it needed.
