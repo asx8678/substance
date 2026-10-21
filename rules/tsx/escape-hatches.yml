@@ -1,0 +1,50 @@
+# S02 escape hatches: TSX (M1-T08).
+#
+# TSX is a separate language in ast-grep because the same text parses differently once JSX is
+# allowed, so the TypeScript rules are repeated here rather than shared. The one addition is
+# a JSX-specific escape hatch: a `!` inside a JSX attribute is a non-null assertion too.
+
+id: tsx-explicit-any
+language: tsx
+severity: hint
+message: explicit `any`
+metadata:
+  check_id: S02
+  sub_check: ts-any
+rule:
+  kind: predefined_type
+  regex: ^any$
+
+---
+id: tsx-as-unknown-as
+language: tsx
+severity: hint
+message: "`as unknown as` cast"
+metadata:
+  check_id: S02
+  sub_check: ts-as-unknown-as
+rule:
+  pattern: $X as unknown as $Y
+
+---
+id: tsx-ignore-comment
+language: tsx
+severity: hint
+message: "`@ts-ignore` suppresses a type error"
+metadata:
+  check_id: S02
+  sub_check: ts-ignore
+rule:
+  kind: comment
+  regex: "@ts-ignore"
+
+---
+id: tsx-non-null-assertion
+language: tsx
+severity: hint
+message: non-null assertion
+metadata:
+  check_id: S02
+  sub_check: ts-non-null
+rule:
+  kind: non_null_expression

@@ -1,0 +1,28 @@
+# S03 swallowed writes: TSX (M1-T08).
+#
+# The same rule as the TypeScript one: TSX is a separate ast-grep language, so a `.tsx` file
+# needs its own copy to be scanned at all.
+#
+# A database write whose promise nobody awaits is a write that may never happen: the request
+# returns, the caller is told it succeeded, and the insert lands later, fails silently, or is
+# cancelled when the process exits. The catalog names the client methods (insert, update,
+# delete, create, upsert, save, execute, query) and the three shapes that do handle them:
+# `await x.insert(…)`, `return x.insert(…)`, and `x.insert(…).then(…)`.
+#
+# The rule matches every client-method call; the check keeps the ones that are the whole body
+# of an expression statement, which is exactly the shape with no await, no return and no
+# .then around it. ast-grep cannot express "not inside an await" directly, and doing it here
+# would need a separate rule per handled shape; see `crates/statics/src/checks/s03.rs`.
+
+id: tsx-unawaited-db-write
+language: tsx
+severity: hint
+message: "database write whose promise nobody handles"
+metadata:
+  check_id: S03
+  sub_check: ts-unawaited-write
+rule:
+  kind: expression_statement
+  has:
+    stopBy: end
+    pattern: $CLIENT.$METHOD($$$ARGS)

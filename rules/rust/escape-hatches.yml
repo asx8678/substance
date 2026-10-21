@@ -1,0 +1,79 @@
+# S02 escape hatches: Rust (M1-T08).
+#
+# `unwrap()` and `expect()` are only counted inside a function that takes an Axum or Actix
+# extractor parameter: in a request handler those two turn a client's bad input into a panic,
+# which is the hazard S02 is about, while the same call in a startup path or a `main` is
+# ordinary. The extractor test is a `has` on the function's parameter list, so the rule is one
+# pattern for both frameworks rather than a special case in Rust code.
+#
+# `todo!()` and `#[allow(dead_code)]` need no such guard: they are escape hatches wherever
+# they appear.
+
+id: rust-unwrap-in-handler
+language: rust
+severity: hint
+message: "`unwrap()` in a request handler"
+metadata:
+  check_id: S02
+  sub_check: rust-unwrap-handler
+rule:
+  all:
+    - pattern: $RECV.unwrap()
+    - inside:
+        kind: function_item
+        # `stopBy: end` on the relation: the call sits in a statement in a block inside the
+        # function, not as an immediate child of it.
+        stopBy: end
+        has:
+          kind: parameters
+          # The extractor is recognised by the parameter list's text, not by matching a
+          # pattern node: `Path(id)` is a tuple-struct pattern, which an expression pattern
+          # like `Path($A)` does not match. A regex over the whole list covers Axum's and
+          # Actix's extractors in one rule.
+          regex: "(Path|Query|Json|State|Extension|Form|WebData|HttpRequest|TypedHeader|Cookies)\\s*[(:]|web::(Path|Query|Json|Form)"
+
+---
+id: rust-expect-in-handler
+language: rust
+severity: hint
+message: "`expect()` in a request handler"
+metadata:
+  check_id: S02
+  sub_check: rust-expect-handler
+rule:
+  all:
+    - pattern: $RECV.expect($$$ARGS)
+    - inside:
+        kind: function_item
+        # `stopBy: end` on the relation: the call sits in a statement in a block inside the
+        # function, not as an immediate child of it.
+        stopBy: end
+        has:
+          kind: parameters
+          # The extractor is recognised by the parameter list's text, not by matching a
+          # pattern node: `Path(id)` is a tuple-struct pattern, which an expression pattern
+          # like `Path($A)` does not match. A regex over the whole list covers Axum's and
+          # Actix's extractors in one rule.
+          regex: "(Path|Query|Json|State|Extension|Form|WebData|HttpRequest|TypedHeader|Cookies)\\s*[(:]|web::(Path|Query|Json|Form)"
+
+---
+id: rust-todo
+language: rust
+severity: hint
+message: "`todo!()`"
+metadata:
+  check_id: S02
+  sub_check: rust-todo
+rule:
+  pattern: todo!()
+
+---
+id: rust-allow-dead-code
+language: rust
+severity: hint
+message: "`#[allow(dead_code)]`"
+metadata:
+  check_id: S02
+  sub_check: rust-allow-dead-code
+rule:
+  pattern: "#[allow(dead_code)]"

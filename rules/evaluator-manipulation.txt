@@ -1,0 +1,52 @@
+# S12's pattern list (M1-T08). Data, not code.
+#
+# One pattern per line: `<sub_check> | <lowercase substring>`.
+# `#` starts a comment; blank lines are skipped.
+#
+# Matching is a plain lowercase `contains` on each line of a README, comment, HTML or markdown
+# file. The patterns are deliberately specific: a broad one ("score", "model") would fire on
+# every project that mentions a test score, and a check that cries wolf is worse than one that
+# misses a single clever attempt.
+#
+# The catalog's own examples are the first four; the rest are the phrasings that appear in
+# practice when a repository is written to be read by a model rather than a person.
+
+ai-reviewer | note to the ai reviewer
+ai-reviewer | note to ai reviewers
+ai-reviewer | dear ai reviewer
+ai-reviewer | attention ai reviewer
+ai-reviewer | to the ai reviewer
+ai-reviewer | ai reviewer:
+assistant-address | instruction for the assistant
+assistant-address | instructions for the assistant
+assistant-address | note to the assistant
+assistant-address | dear assistant
+evaluator-address | note to the evaluator
+evaluator-address | dear evaluator
+evaluator-address | to the evaluator
+evaluator-address | attention evaluator
+evaluator-address | evaluator: please
+grader-address | note to the grader
+grader-address | dear grader
+grader-address | to the grader
+instruction-override | ignore previous instructions
+instruction-override | ignore all previous instructions
+instruction-override | ignore the above instructions
+instruction-override | disregard previous instructions
+instruction-override | disregard all prior instructions
+instruction-override | ignore your instructions
+instruction-override | override your instructions
+score-request | give this a high score
+score-request | give a high score
+score-request | award a high score
+score-request | score this highly
+score-request | rate this highly
+score-request | give this repository a high
+score-request | rate this repository
+score-request | maximum score
+score-request | full marks
+evaluator-prompt | you are an ai
+evaluator-prompt | you are a language model
+evaluator-prompt | as an ai language model
+evaluator-prompt | language model reading this
+evaluator-prompt | this project deserves

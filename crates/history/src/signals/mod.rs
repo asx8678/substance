@@ -246,6 +246,8 @@ pub struct HistoryInput {
     pub test_paths: common::TestPathRules,
     /// What OpenSSF Scorecard said, or why it said nothing (H21).
     pub scorecard: h21::ScorecardRun,
+    /// The scaffold table's comparison against this tree's contents (H17).
+    pub scaffold: h17::ScaffoldPart,
 }
 
 /// The file names a README may have, in the order H16 tries them.
@@ -275,6 +277,44 @@ const CHANGELOG_NAMES: &[&str] = &[
 /// `git ls-tree` already prints the SHA, but the engine's tree listing keeps only names, so
 /// this asks git once for the pairs. A failure yields an empty list: H17 then reports that it
 /// had nothing to compare, which is the honest answer.
+/// The scaffold-table comparison against this tree, for H17.
+///
+/// The table is embedded and the lookup is by path, so only the files a scaffolder actually
+/// ships are read — hashing the whole tree to find out that none of it matches would be
+/// thousands of git calls for a zero. Each read is `cat-file` at HEAD, so an uncommitted edit
+/// never changes the answer, and the digest is sha256 of the raw bytes because that is what
+/// `scripts/scaffold-hashes.sh` records (git's own blob id hashes a header too).
+async fn scaffold_contents(repo: &GitRepo, authored: &[String]) -> h17::ScaffoldPart {
+    let pack = match substance_core::scaffolds::ScaffoldPack::load() {
+        Ok(pack) => pack,
+        Err(reason) => {
+            return h17::ScaffoldPart::unavailable(format!(
+                "the embedded scaffold table is malformed: {reason}"
+            ));
+        }
+    };
+    if !pack.has_hashes() {
+        return h17::ScaffoldPart::unavailable(
+            "rules/scaffolds.toml records no file hashes: scripts/scaffold-hashes.sh has not been run",
+        );
+    }
+    let mut contents: Vec<(String, String)> = Vec::new();
+    for path in authored {
+        let known = pack.files().iter().any(|file| file.path == *path);
+        if !known {
+            continue;
+        }
+        let Ok(text) = repo.blob_text("HEAD", path).await else {
+            continue;
+        };
+        contents.push((
+            path.clone(),
+            substance_core::hash::hex(&substance_core::hash::sha256(text.as_bytes())),
+        ));
+    }
+    h17::ScaffoldPart::compare(&contents, pack.files())
+}
+
 async fn head_blobs(repo: &GitRepo) -> Vec<(String, String)> {
     repo.blobs("HEAD").await.unwrap_or_default()
 }
@@ -388,6 +428,9 @@ impl HistoryInput {
             }
             None => h21::ScorecardRun::no_slug(),
         };
+        // H17's scaffold half: the table is embedded, but reading the tree's contents to hash
+        // them is IO, so it happens here with everything else and the judge only counts.
+        let scaffold = scaffold_contents(repo, &authored).await;
         Ok(Self {
             commits,
             authored,
@@ -403,6 +446,7 @@ impl HistoryInput {
             head_blobs,
             test_paths: common::TestPathRules::parse(&test_paths_text),
             scorecard,
+            scaffold,
         })
     }
 
@@ -818,8 +862,10 @@ pub fn report_of(check: CheckId, judgment: Judgment) -> SignalReport {
 
 /// Every history signal, in ID order.
 ///
-/// H17 runs its template comparison here; its scaffold-hash half arrives in M1-T08 and is
-/// named in the check's note until then.
+/// One entry per check, each a pure function of a gathered [HistoryInput]. H17 is one entry
+/// even though it compares two things: a template and a scaffold answer the same question
+/// about the same tree, so they are two metrics on one verdict rather than two checks a
+/// reader has to add up.
 #[must_use]
 pub fn signals() -> Vec<Signal> {
     vec![

@@ -10,7 +10,7 @@
 //! line is checkable; one that cites a whole file is not.
 
 use substance_core::FindingId;
-use substance_core::check::CheckId;
+use substance_core::check::{CheckId, Family};
 use substance_core::model::{Evidence, Finding, Target};
 use substance_core::registry;
 
@@ -76,25 +76,25 @@ pub fn evidence(found: &RuleMatch) -> Evidence {
     found.evidence()
 }
 
-/// Whether a check ID is one the static engine may attribute rules to.
+/// The check families a rule file may attribute a match to.
 ///
 /// The registry is total, so this is a policy question, not a lookup: a rule naming `H04`
 /// would produce a history finding from a parse of one file, which no reader would expect.
+/// The families here are the ones whose questions a parse can answer:
+///
+/// - `S`: the static checks, which are what this engine was built for;
+/// - `D`: D04 (M1-T09) and M9's money-type check ask about type and model declarations;
+/// - `T`: T04 (M1-T09) counts assertions and skips by looking at test code;
+/// - `L`: L05 reads prompts and model calls in source;
+/// - `V`: V03 (M1-T11) dates an API by the calls in the tree.
+///
+/// A family outside this list (`B`, `I`, `O`, `P`, `A`, `G`) needs evidence a single
+/// file does not carry, so a rule claiming one is a load error rather than a finding nobody
+/// can interpret.
+pub const RULE_FAMILIES: &[Family] = &[Family::S, Family::D, Family::T, Family::L, Family::V];
+
+/// Whether a check may receive findings from a parsed file.
 #[must_use]
-pub fn is_static_check(id: CheckId) -> bool {
-    matches!(
-        id,
-        CheckId::S01
-            | CheckId::S02
-            | CheckId::S03
-            | CheckId::S04
-            | CheckId::S05
-            | CheckId::S06
-            | CheckId::S07
-            | CheckId::S08
-            | CheckId::S09
-            | CheckId::S10
-            | CheckId::S11
-            | CheckId::S12
-    )
+pub fn is_rule_check(id: CheckId) -> bool {
+    RULE_FAMILIES.contains(&registry::meta(id).family)
 }

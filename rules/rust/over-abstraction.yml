@@ -1,0 +1,26 @@
+# S09 over-abstraction: Rust (M1-T08).
+#
+# The catalog's Rust shape is a trait with exactly one `impl … for`. That needs the whole tree,
+# so it is a check rather than a rule (see `crates/statics/src/checks/s09.rs`); this file holds
+# the local half, which is a function whose body is one call passing its own parameters.
+#
+# A one-line delegating `impl` is idiomatic Rust — it is how a newtype forwards to its inner
+# type — so this rule exists to give the check a starting set, not to accuse. The check then
+# looks at whether the callee shares the parameters' names, which is what separates
+# forwarding (`fn get(&self) -> i32 { self.inner.get() }`) from doing anything at all.
+
+id: rust-forwarding-method
+language: rust
+severity: hint
+message: "method that only forwards its arguments"
+metadata:
+  check_id: S09
+  sub_check: rust-passthrough
+rule:
+  kind: function_item
+  has:
+    kind: block
+    has:
+      kind: expression_statement
+      has:
+        pattern: $RECV.$METHOD($$$ARGS)

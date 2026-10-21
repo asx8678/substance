@@ -1,0 +1,19 @@
+# S03 swallowed writes: Rust (M1-T08).
+#
+# `let _ = query.execute(…)` discards the result of a database call. In an async handler that
+# is usually an oversight: the row is written, but a constraint violation returns as a silent
+# `Err` nobody reads, so the response says "created" whatever the database did.
+#
+# The catalog's pattern is exactly this shape. `let _ =` on other calls is S02's `let _ =`
+# escape hatch; here the receiver must be a database handle, which the check's method list
+# decides (see `crates/statics/src/checks/s03.rs`).
+
+id: rust-discarded-db-write
+language: rust
+severity: hint
+message: "`let _ =` on a database write"
+metadata:
+  check_id: S03
+  sub_check: rust-discarded-write
+rule:
+  pattern: let _ = $QUERY.execute($$$ARGS)

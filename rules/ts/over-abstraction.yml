@@ -1,0 +1,25 @@
+# S09 over-abstraction: TypeScript (M1-T08).
+#
+# The catalog's two shapes are an interface (or abstract class) with exactly one
+# implementation, and a function whose body only forwards its arguments to another call.
+#
+# The first needs a count across the whole tree, so it is a check rather than a rule: one file
+# cannot see whether a second `implements` exists elsewhere. The second is local and belongs
+# here. `$FN($$$ARGS)` inside a one-statement body is the forwarding shape; the check requires
+# that the body is exactly that call, so a function that does anything else is not reported.
+
+id: ts-passthrough-function
+language: ts
+severity: hint
+message: "function that only forwards its arguments"
+metadata:
+  check_id: S09
+  sub_check: ts-passthrough
+rule:
+  kind: function_declaration
+  has:
+    kind: statement_block
+    has:
+      kind: return_statement
+      has:
+        pattern: $CALLEE($$$ARGS)

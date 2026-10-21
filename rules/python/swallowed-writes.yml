@@ -1,0 +1,30 @@
+# S03 swallowed writes: Python (M1-T08).
+#
+# `except: pass` around a `commit()` is the Python form of a swallowed write. The failure is
+# caught and dropped, so the transaction is neither retried nor reported, and the caller sees
+# the success path.
+#
+# The rule matches the `try` statement, not the bare `except`: the question is whether the
+# block that commits also swallows its own failure, so the check needs both halves in view.
+# S02 has the same `except: pass` pattern for its own question (did an error disappear at
+# all); one shape, two checks, as the catalog intends.
+
+id: py-swallowed-commit
+language: py
+severity: hint
+message: "`except: pass` around a commit"
+metadata:
+  check_id: S03
+  sub_check: py-swallowed-commit
+rule:
+  kind: try_statement
+  all:
+    - has:
+        stopBy: end
+        regex: "commit\\(\\)"
+    - has:
+        kind: except_clause
+        stopBy: end
+        has:
+          kind: pass_statement
+          stopBy: end

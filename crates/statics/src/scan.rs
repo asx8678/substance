@@ -95,8 +95,15 @@ pub struct ScanStats {
     /// `git cat-file` failed for the blob — a submodule entry, a broken object — and one
     /// such file must not lose the scan's other findings.
     pub skipped_binary: u32,
-    /// Files whose parse failed, by language directory (`ts`, `py`, …).
+    /// Files whose parse failed, by language directory (`ts`, `python`, …).
     pub parse_failures: BTreeMap<String, u32>,
+    /// Authored lines across every authored path at the commit, whatever its language.
+    ///
+    /// The denominator for S02's "per 1,000 authored lines". It counts the whole authored
+    /// tree, not just the five parsed languages, because the question is how much escape
+    /// hatch a project has per thousand lines *it wrote* — a Rust service with one
+    /// `unwrap()` in a handler is a different thing at 200 lines and at 20,000.
+    pub authored_lines: u64,
 }
 
 /// The result of one scan.
@@ -133,6 +140,9 @@ pub async fn scan(repo: &GitRepo, rev: &str, pack: &RulePack) -> Result<ScanRepo
         if authored.binary_search(&entry.path).is_err() {
             continue;
         }
+        // The authored-line count covers every authored file, not just the parsed ones, so it
+        // is taken here before the language-specific skips below.
+        report.stats.authored_lines += authored_lines(repo, rev, &entry.path).await;
         report.stats.considered += 1;
         if entry.size > MAX_FILE_BYTES {
             report.stats.skipped_large += 1;
@@ -144,6 +154,18 @@ pub async fn scan(repo: &GitRepo, rev: &str, pack: &RulePack) -> Result<ScanRepo
         .matches
         .sort_by(|left, right| left.sort_key().cmp(&right.sort_key()));
     Ok(report)
+}
+
+/// The number of lines in one authored file at the commit.
+///
+/// A file git cannot produce counts as zero rather than failing the scan: the line count is a
+/// denominator, and one unreadable blob should lower it by one file, not lose every finding.
+/// The trailing newline does not make an extra line (`"a\n"` is one line, not two).
+async fn authored_lines(repo: &GitRepo, rev: &str, path: &str) -> u64 {
+    match repo.blob_text(rev, path).await {
+        Ok(text) => u64::try_from(text.lines().count()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
 }
 
 /// Reads, parses and matches one file, recording what happened in `report`.

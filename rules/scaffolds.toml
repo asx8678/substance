@@ -1,0 +1,88 @@
+# S04's known-scaffold file (M1-T08). Data, not code.
+#
+# Two halves, because they answer two different questions:
+#
+#   [[markers]]  a string a default scaffold leaves in a file, and the file it appears in.
+#                These match without any tooling, and they are what S04 can report today.
+#
+#   [[files]]    a sha256 of one file as an official template ships it, at a recorded
+#                version. These are the hash half, and they are empty on purpose: the hashes
+#                must come from a real template at a real version, which is what
+#                scripts/scaffold-hashes.sh produces on the owner's machine (§8). Until it
+#                has been run the hash part reports `not_measured` in `parts`, and S04 says
+#                so rather than pretending a text marker is a hash match.
+#
+# `scripts/scaffold-hashes.sh` writes the [[files]] entries; nothing else may, because a
+# hash invented rather than recorded would match nothing or, worse, match the wrong file.
+
+[scaffolds]
+version = 1
+
+# The template versions the markers were read from.
+[[scaffolds.sources]]
+tool = "create-vite"
+version = "5.5.4"
+note = "the default `npm create vite@latest <name> -- --template react-ts` output"
+
+[[scaffolds.sources]]
+tool = "create-next-app"
+version = "14.2.5"
+note = "the default `npx create-next-app@latest` output"
+
+[[scaffolds.sources]]
+tool = "uv"
+version = "0.4.27"
+note = "the default `uv init` output"
+
+# Text markers: a string the scaffold leaves behind, and the path it appears in.
+# `path` is an exact repo-relative path; `contains` is the substring searched for in it.
+[[markers]]
+tool = "create-vite"
+path = "package.json"
+contains = "\"name\": \"vite-project\""
+sub_check = "vite-default-package-name"
+
+[[markers]]
+tool = "create-vite"
+path = "index.html"
+contains = "<title>Vite + React + TS</title>"
+sub_check = "vite-default-title"
+
+[[markers]]
+tool = "create-vite"
+path = "public/vite.svg"
+contains = ""
+sub_check = "vite-default-asset"
+
+[[markers]]
+tool = "uv"
+path = "pyproject.toml"
+contains = "Add your description here"
+sub_check = "uv-default-description"
+
+[[markers]]
+tool = "create-next-app"
+path = "README.md"
+contains = "This is a [Next.js](https://nextjs.org) project bootstrapped with"
+sub_check = "next-app-default-readme"
+
+[[markers]]
+tool = "create-next-app"
+path = "app/layout.tsx"
+contains = "Geist, Geist_Mono"
+sub_check = "next-app-default-layout"
+
+[[markers]]
+tool = "license"
+path = "LICENSE"
+contains = "[year] [fullname]"
+sub_check = "license-unfilled"
+
+# File hashes: path, sha256, and the scaffold + version it came from.
+# Empty until scripts/scaffold-hashes.sh has run (see the header).
+#
+# [[files]]
+# path = "src/App.tsx"
+# sha256 = "…"
+# tool = "create-vite"
+# version = "5.5.4"

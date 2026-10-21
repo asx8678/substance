@@ -42,14 +42,18 @@ pub enum Lang {
 
 impl Lang {
     /// The directory under `rules/` that holds this language's rules.
+    ///
+    /// These are the plan's paths, spelled out the way a reader would look for them:
+    /// `rust` and `python`, not the file extensions. The moniker below is a different
+    /// thing — that one is ast-grep's YAML vocabulary, where a rule says `language: rs`.
     #[must_use]
     pub const fn dir(self) -> &'static str {
         match self {
             Self::TypeScript => "ts",
             Self::Tsx => "tsx",
             Self::JavaScript => "js",
-            Self::Python => "py",
-            Self::Rust => "rs",
+            Self::Python => "python",
+            Self::Rust => "rust",
         }
     }
 

@@ -1,0 +1,18 @@
+# S02 escape hatches: JavaScript (M1-T08).
+#
+# The catalog's S02 patterns are TypeScript, Rust and Python ones. JavaScript has no type
+# system, so `any`, `as unknown as` and the non-null assertion do not exist there; what does
+# exist is the `// @ts-ignore` habit copied in from a TS neighbour, which silences a checker
+# the file does not even go through. That is the one JavaScript rule, and it is deliberate:
+# a rule per TypeScript pattern would find nothing and only look thorough.
+
+id: js-ignore-comment
+language: js
+severity: hint
+message: "`@ts-ignore` in a JavaScript file"
+metadata:
+  check_id: S02
+  sub_check: ts-ignore
+rule:
+  kind: comment
+  regex: "@ts-ignore"

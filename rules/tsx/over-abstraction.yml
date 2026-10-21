@@ -1,0 +1,20 @@
+# S09 over-abstraction: TSX (M1-T08).
+#
+# The TypeScript rule in the TSX language: a function whose body is one forwarded call.
+
+---
+id: tsx-passthrough-function
+language: tsx
+severity: hint
+message: "function that only forwards its arguments"
+metadata:
+  check_id: S09
+  sub_check: ts-passthrough
+rule:
+  kind: function_declaration
+  has:
+    kind: statement_block
+    has:
+      kind: return_statement
+      has:
+        pattern: $CALLEE($$$ARGS)

@@ -30,24 +30,52 @@ use crate::lang::{LANGS, Lang};
 /// listed but does not exist fails the build.
 pub const FILES: &[(&str, &str)] = &[
     (
-        "rules/js/_engine.yml",
-        include_str!("../../../rules/js/_engine.yml"),
+        "rules/python/swallowed-writes.yml",
+        include_str!("../../../rules/python/swallowed-writes.yml"),
     ),
     (
-        "rules/py/_engine.yml",
-        include_str!("../../../rules/py/_engine.yml"),
+        "rules/rust/over-abstraction.yml",
+        include_str!("../../../rules/rust/over-abstraction.yml"),
     ),
     (
-        "rules/rs/_engine.yml",
-        include_str!("../../../rules/rs/_engine.yml"),
+        "rules/rust/swallowed-writes.yml",
+        include_str!("../../../rules/rust/swallowed-writes.yml"),
     ),
     (
-        "rules/ts/_engine.yml",
-        include_str!("../../../rules/ts/_engine.yml"),
+        "rules/ts/over-abstraction.yml",
+        include_str!("../../../rules/ts/over-abstraction.yml"),
     ),
     (
-        "rules/tsx/_engine.yml",
-        include_str!("../../../rules/tsx/_engine.yml"),
+        "rules/ts/swallowed-writes.yml",
+        include_str!("../../../rules/ts/swallowed-writes.yml"),
+    ),
+    (
+        "rules/tsx/over-abstraction.yml",
+        include_str!("../../../rules/tsx/over-abstraction.yml"),
+    ),
+    (
+        "rules/tsx/swallowed-writes.yml",
+        include_str!("../../../rules/tsx/swallowed-writes.yml"),
+    ),
+    (
+        "rules/js/escape-hatches.yml",
+        include_str!("../../../rules/js/escape-hatches.yml"),
+    ),
+    (
+        "rules/python/escape-hatches.yml",
+        include_str!("../../../rules/python/escape-hatches.yml"),
+    ),
+    (
+        "rules/rust/escape-hatches.yml",
+        include_str!("../../../rules/rust/escape-hatches.yml"),
+    ),
+    (
+        "rules/ts/escape-hatches.yml",
+        include_str!("../../../rules/ts/escape-hatches.yml"),
+    ),
+    (
+        "rules/tsx/escape-hatches.yml",
+        include_str!("../../../rules/tsx/escape-hatches.yml"),
     ),
 ];
 
@@ -260,12 +288,13 @@ fn parse_file(path: &str, text: &str, globals: &GlobalRules) -> Result<Vec<Rule>
                 format!("rule `{id}` names check_id `{check_text}`, which is not in the catalog"),
             )
         })?;
-        if !crate::finding::is_static_check(check_id) {
+        if !crate::finding::is_rule_check(check_id) {
             return Err(RulePackError::new(
                 path,
                 format!(
-                    "rule `{id}` names check_id `{check_text}`, but static rules belong to S01-S12: \
-                     a parse of one file cannot answer a check from another family"
+                    "rule `{id}` names check_id `{check_text}`, whose family a single parsed \
+                     file cannot answer: rules may serve {} only",
+                    families()
                 ),
             ));
         }
@@ -307,6 +336,15 @@ fn parse_file(path: &str, text: &str, globals: &GlobalRules) -> Result<Vec<Rule>
         });
     }
     Ok(rules)
+}
+
+/// The allowed families, spelled for an error message: `S, D, T, L, V`.
+fn families() -> String {
+    crate::finding::RULE_FAMILIES
+        .iter()
+        .map(|family| family.as_str().to_owned())
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 /// One required metadata field, or a load error naming the rule and the field.

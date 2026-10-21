@@ -22,15 +22,23 @@
 //! let hash = pack.hash();                     // manifest rule_pack_hash
 //! ```
 
+pub mod checks;
+pub mod file_finding;
 pub mod finding;
 pub mod lang;
 pub mod rulepack;
+pub mod run;
 pub mod scan;
+pub mod tree;
 
-pub use finding::{is_static_check, to_finding};
+pub use checks::StaticReport;
+pub use file_finding::Location;
+pub use finding::{RULE_FAMILIES, is_rule_check, to_finding};
 pub use lang::{LANGS, Lang};
 pub use rulepack::{FILES, Rule, RulePack, RulePackError, hash_files};
+pub use run::{ScanCoverage, StaticError, StaticOutcome, run_static_checks};
 pub use scan::{MAX_FILE_BYTES, RuleMatch, ScanReport, ScanStats, scan};
+pub use tree::TrackedTree;
 
 use substance_core::model::Finding;
 

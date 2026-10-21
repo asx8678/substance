@@ -1,0 +1,92 @@
+# gitleaks configuration substance uses for S11 (M1-T08). Data, not code.
+#
+# S11 runs gitleaks with THIS file, never with the evaluated repository's `.gitleaks.toml`.
+# That is the whole point: a project that ships its own config could allowlist the secret it
+# committed, and a check a repository can silence is not a check. The repo's `.gitleaksignore`
+# is ignored for the same reason.
+#
+# THE RULES BELOW ARE NOT GITLEAKS' FULL RULESET.
+#
+# The pinned gitleaks (8.30.1) ships several hundred rules in its embedded default config, and
+# the plan says to run "gitleaks' default rules at the pinned version". Copying them here by
+# hand would be a transcription nobody could verify against the pinned release, so this file
+# carries the subset that can be stated confidently — the tokens that are unambiguous in shape,
+# like `ghp_` GitHub tokens and PEM private keys — and `extend.useDefault = true` asks gitleaks
+# to add its own defaults on top. That way the scan is never weaker than the default, and the
+# explicit rules below are the ones this project is willing to defend in review.
+#
+# `scripts/guards.sh` fails if this file loses `useDefault = true`: that line is what keeps the
+# scan at the pinned version's full strength.
+
+title = "substance S11 secrets"
+
+[extend]
+useDefault = true
+
+# A repository's own ignore file must not silence a finding.
+[allowlist]
+description = "no repository-provided allowlist: S11 only ignores what this file says"
+paths = []
+
+[[rules]]
+id = "github-pat"
+description = "GitHub personal access token"
+regex = '''ghp_[0-9A-Za-z]{36}'''
+keywords = ["ghp_"]
+
+[[rules]]
+id = "github-oauth"
+description = "GitHub OAuth access token"
+regex = '''gho_[0-9A-Za-z]{36}'''
+keywords = ["gho_"]
+
+[[rules]]
+id = "github-app-token"
+description = "GitHub App token"
+regex = '''(ghu|ghs)_[0-9A-Za-z]{36}'''
+keywords = ["ghu_", "ghs_"]
+
+[[rules]]
+id = "github-refresh-token"
+description = "GitHub refresh token"
+regex = '''ghr_[0-9A-Za-z]{76}'''
+keywords = ["ghr_"]
+
+[[rules]]
+id = "private-key"
+description = "PEM private key block"
+regex = '''-----BEGIN (RSA|EC|OPENSSH|PGP|DSA) PRIVATE KEY-----'''
+keywords = ["PRIVATE KEY"]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS access key id"
+regex = '''(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'''
+keywords = ["AKIA", "ASIA", "AGPA", "AIDA", "AROA", "AIPA", "ANPA", "ANVA"]
+
+[[rules]]
+id = "slack-token"
+description = "Slack bot or app token"
+regex = '''xox[abopr]-[0-9A-Za-z-]{10,}'''
+keywords = ["xox"]
+
+[[rules]]
+id = "stripe-live-key"
+description = "Stripe live secret key"
+regex = '''sk_live_[0-9A-Za-z]{24,}'''
+keywords = ["sk_live_"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API key"
+regex = '''AIza[0-9A-Za-z_-]{35}'''
+keywords = ["AIza"]
+
+[[rules]]
+id = "openai-key"
+description = "OpenAI-style API key"
+regex = '''sk-[0-9A-Za-z]{20}T3BlbkFJ[0-9A-Za-z]{20}'''
+keywords = ["T3BlbkFJ"]
+
+# The scan must not report the same secret twice for one commit via two rules, but it SHOULD
+# report a secret once per commit it appears in: rotation depends on knowing every commit.

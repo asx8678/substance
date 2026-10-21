@@ -1,0 +1,53 @@
+# S02 escape hatches: TypeScript (M1-T08).
+#
+# The catalog's patterns for TypeScript: `any`, `as unknown as`, `@ts-ignore`, and the
+# non-null assertion `!`. Each rule names the sub-check it feeds, so one check reports a
+# per-pattern breakdown instead of a single opaque count.
+#
+# Severity is the rule's own reading of ast-grep; substance takes the finding's severity and
+# confidence from the catalog registry, not from this file.
+
+id: ts-explicit-any
+language: ts
+severity: hint
+message: explicit `any`
+metadata:
+  check_id: S02
+  sub_check: ts-any
+rule:
+  kind: predefined_type
+  regex: ^any$
+
+---
+id: ts-as-unknown-as
+language: ts
+severity: hint
+message: "`as unknown as` cast"
+metadata:
+  check_id: S02
+  sub_check: ts-as-unknown-as
+rule:
+  pattern: $X as unknown as $Y
+
+---
+id: ts-ignore-comment
+language: ts
+severity: hint
+message: "`@ts-ignore` suppresses a type error"
+metadata:
+  check_id: S02
+  sub_check: ts-ignore
+rule:
+  kind: comment
+  regex: "@ts-ignore"
+
+---
+id: ts-non-null-assertion
+language: ts
+severity: hint
+message: non-null assertion
+metadata:
+  check_id: S02
+  sub_check: ts-non-null
+rule:
+  kind: non_null_expression

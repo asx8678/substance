@@ -1,0 +1,46 @@
+# S02 escape hatches: Python (M1-T08).
+#
+# A bare `except: pass` is also S03 when it wraps a commit; the same pattern serves both
+# because the two checks ask different questions of one shape (did it swallow an error, and
+# did it swallow a write). `# type: ignore` and a `print()` used as a debugger are the other
+# two the catalog names.
+
+id: py-except-pass
+language: py
+severity: hint
+message: "bare `except: pass`"
+metadata:
+  check_id: S02
+  sub_check: py-except-pass
+rule:
+  # A bare `except: pass` is an `except_clause` whose body is just `pass`. Naming the kind
+  # gives the rule a node kind to look for; `stopBy: end` is what makes `has` search the whole
+  # clause rather than only its immediate children (the `pass` sits one block deeper), and it
+  # matches the form with and without an exception type.
+  kind: except_clause
+  has:
+    kind: pass_statement
+    stopBy: end
+
+---
+id: py-type-ignore
+language: py
+severity: hint
+message: "`# type: ignore`"
+metadata:
+  check_id: S02
+  sub_check: py-type-ignore
+rule:
+  kind: comment
+  regex: "#\\s*type:\\s*ignore"
+
+---
+id: py-print-debug
+language: py
+severity: hint
+message: "`print()` used as a debugger"
+metadata:
+  check_id: S02
+  sub_check: py-print
+rule:
+  pattern: print($$$ARGS)
