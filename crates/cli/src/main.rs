@@ -6,6 +6,7 @@
 
 mod checks;
 mod cli;
+mod doctor;
 mod error;
 mod output;
 mod run;
@@ -58,7 +59,10 @@ fn dispatch(command: Command) -> Result<ExitCode, CliError> {
                 Ok(ExitCode::from(EXIT_OK))
             }
         },
-        Command::Doctor(_args) => not_yet("M2"),
+        Command::Doctor(args) => {
+            doctor::report(&args)?;
+            Ok(ExitCode::from(EXIT_OK))
+        }
     }
 }
 

@@ -2373,9 +2373,11 @@ dependencies = [
  "jsonschema",
  "serde",
  "serde_json",
+ "substance-adapters",
  "substance-core",
  "substance-orchestrator",
  "substance-report",
+ "substance-runner",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
 ]

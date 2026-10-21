@@ -161,6 +161,101 @@ impl PostgresAdapter {
         &self.server
     }
 
+    /// Runs the same preflight a run does, for a caller that is not a run (M2-T06).
+    ///
+    /// `substance doctor` has to answer exactly the questions a run would answer, or it would be
+    /// describing a different host than the one the next run gets. Delegating is the only way to
+    /// guarantee that: a second implementation would drift, and the drift would only show up as a
+    /// run failing after doctor said the server was fine.
+    ///
+    /// # Errors
+    ///
+    /// As [`DbAdapter::preflight`]: a server that cannot be reached, or a statement that fails.
+    pub async fn preflight_public(&self) -> Result<Capabilities, DbError> {
+        DbAdapter::preflight(self).await
+    }
+
+    /// The server's `wal_level`, as it reports it.
+    ///
+    /// Doctor wants the value itself, where a run only needs to know whether decoding is available.
+    /// Asked directly rather than read back out of [`Capabilities::problems`]: that list is prose
+    /// written for a report, and parsing prose to recover a fact is how a message improvement turns
+    /// into a wrong answer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DbError`] when the server cannot be reached or the setting cannot be read.
+    pub async fn wal_level(&self) -> Result<Option<String>, DbError> {
+        let client = self.connect().await?;
+        Self::scalar(&client, "read wal_level", "SHOW wal_level").await
+    }
+
+    /// The `substance_%` databases left on the server, names only, sorted.
+    ///
+    /// These are the residue a `SIGKILL` leaves, and each may also hold a replication slot, which
+    /// pins WAL until something drops it. Doctor lists them; it does not remove them, because a
+    /// database named `substance_` may belong to a run that is still going.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DbError`] when the catalog cannot be read.
+    pub async fn leftover_databases(&self) -> Result<Vec<String>, DbError> {
+        let client = self.connect().await?;
+        let messages = client
+            .simple_query(
+                "SELECT datname FROM pg_database WHERE datname LIKE 'substance\\_%' \
+                 AND datname <> 'substance' ORDER BY datname",
+            )
+            .await
+            .map_err(|error| DbError::Statement {
+                engine: "postgres".to_owned(),
+                operation: "list leftover databases".to_owned(),
+                database: self.server.to_string(),
+                detail: redact_text(&error.to_string()),
+            })?;
+        let mut names: Vec<String> = Vec::new();
+        for message in messages {
+            if let tokio_postgres::SimpleQueryMessage::Row(row) = message
+                && let Some(name) = row.get(0)
+            {
+                names.push(name.to_owned());
+            }
+        }
+        names.sort();
+        names.dedup();
+        Ok(names)
+    }
+
+    /// The replication slots left on the server, names only, sorted.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DbError`] when the catalog cannot be read. A server where this fails is one
+    /// where the row-diff channel is unavailable, and the caller reports that rather than a leak.
+    pub async fn leftover_slots(&self) -> Result<Vec<String>, DbError> {
+        let client = self.connect().await?;
+        let messages = client
+            .simple_query("SELECT slot_name FROM pg_replication_slots ORDER BY slot_name")
+            .await
+            .map_err(|error| DbError::Statement {
+                engine: "postgres".to_owned(),
+                operation: "list replication slots".to_owned(),
+                database: self.server.to_string(),
+                detail: redact_text(&error.to_string()),
+            })?;
+        let mut names: Vec<String> = Vec::new();
+        for message in messages {
+            if let tokio_postgres::SimpleQueryMessage::Row(row) = message
+                && let Some(name) = row.get(0)
+            {
+                names.push(name.to_owned());
+            }
+        }
+        names.sort();
+        names.dedup();
+        Ok(names)
+    }
+
     /// Every database this run owns: the pair `provision` makes plus the snapshots taken since.
     ///
     /// Sorted and deduplicated, so two calls with the same state produce the same list and a
