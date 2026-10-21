@@ -2236,7 +2236,7 @@ Tick each task in the same commit that completes it.
 - [x] M3-T05 Normalization and idle baseline
 - [x] M3-T06 Clock, TZ, locale
 - [x] M3-T07 Replay
-- [ ] M4-T01 Crawler
+- [x] M4-T01 Crawler
 - [ ] M4-T02 Oracle framework, 3-of-3
 - [ ] M4-T03 B01–B04
 - [ ] M4-T04 B18, B19, B28–B31, bundle scans

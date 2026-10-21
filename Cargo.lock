@@ -2895,6 +2895,10 @@ dependencies = [
 name = "substance-crawler"
 version = "0.0.0"
 dependencies = [
+ "rand_chacha",
+ "serde",
+ "serde_json",
+ "substance-core",
  "thiserror",
  "tracing",
 ]
@@ -2935,6 +2939,7 @@ dependencies = [
  "serde_json",
  "substance-adapters",
  "substance-core",
+ "substance-crawler",
  "substance-history",
  "substance-recorder",
  "substance-report",

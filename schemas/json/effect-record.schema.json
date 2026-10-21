@@ -1368,8 +1368,15 @@
       "description": "The action under test."
     },
     "check_id": {
-      "$ref": "#/$defs/CheckId",
-      "description": "The check that asked for the action."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CheckId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The check that asked for the action, or `None` for the crawl's own records.\n\nThe crawler (M4-T01) observes every control on every screen, and no check asked for those\nactions: they are what the app does, not a probe of a defect. Making the field optional rather\nthan inventing a pseudo-check keeps \"which check produced this?\" answerable with \"none\", which\nis true, instead of naming a check that never ran. Every other record has one, and the\nrecord id derives from it, so a crawl record can never collide with a check's record."
     },
     "db": {
       "$ref": "#/$defs/Measured2",
@@ -1456,7 +1463,6 @@
   "required": [
     "id",
     "run_id",
-    "check_id",
     "target",
     "snapshot",
     "repetition",

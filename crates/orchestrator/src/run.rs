@@ -341,6 +341,43 @@ async fn run_stages(
         Err(note) => runtime_notes.push(note),
     }
 
+    // The explore stage: boot, crawl, and write the app model (M4-T01). It runs after the runtime
+    // stage because it needs a bootable app, and its own boot is independent: the runtime's app is
+    // stopped by the time its snapshot is taken, so this stage boots its own and stops it again.
+    // A staged crawl is skipped without --allow-exec, for the same reason every other app stage is.
+    let mut explore_notes = Vec::new();
+    if checkout.permit.is_some() {
+        let explore_env: std::collections::BTreeMap<String, String> =
+            substance_core::clock_controls::frozen_env(&libfaketime, manifest.frozen_clock)
+                .into_iter()
+                .collect();
+        match crate::explore::run(&crate::explore::ExploreInput {
+            config: &config,
+            work: checkout.root.as_path(),
+            run_dir: run_dir.as_path(),
+            run_id: &manifest.run_id,
+            master_seed,
+            as_of: manifest.frozen_clock,
+            env: &explore_env,
+            tools: &runtime_tools,
+            permit: checkout.permit.as_ref(),
+            commit_sha: &manifest.repo.commit_sha,
+            config_hash: &manifest.config_hash,
+            rule_pack_hash: &manifest.rule_pack_hash,
+            registrar,
+        })
+        .await
+        {
+            Ok(outcome) => explore_notes.extend(outcome.notes),
+            Err(note) => explore_notes.push(format!("explore: {note}")),
+        }
+    } else {
+        explore_notes.push(
+            "explore: without --allow-exec there is no app to crawl, so there is no app model"
+                .to_owned(),
+        );
+    }
+
     // The runtime stage's verdicts replace the `not_measured` rows triage left for those checks:
     // triage has no app, so O01's exec part, O02, O03 and O04 can only be answered after one ran.
     // A check the project disabled stays disabled, which is why the config is consulted again here
@@ -405,6 +442,7 @@ async fn run_stages(
         notes: {
             let mut notes = triage.notes_all;
             notes.extend(runtime_notes);
+            notes.extend(explore_notes);
             notes.extend(run_notes(&config, options.allow_exec, &source));
             notes.sort();
             notes.dedup();
@@ -503,7 +541,13 @@ impl Invocation {
     /// written to the manifest.
     fn of(options: &RunOptions, run_dir: &Path, config_source: &'static str) -> Self {
         Self {
-            stages: vec![Stage::Intake.as_str(), Stage::Report.as_str()],
+            stages: vec![
+                Stage::Intake.as_str(),
+                Stage::Triage.as_str(),
+                Stage::Runtime.as_str(),
+                Stage::Explore.as_str(),
+                Stage::Report.as_str(),
+            ],
             input: options.repo.display().to_string(),
             config_source,
             triage_only: options.triage_only,

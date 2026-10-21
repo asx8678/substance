@@ -71,8 +71,8 @@ pub enum RecordError {
 pub struct RecordContext {
     /// The run.
     pub run_id: RunId,
-    /// The check that asked for the action.
-    pub check_id: substance_core::check::CheckId,
+    /// The check that asked for the action, or `None` for a crawl record (M4-T01).
+    pub check_id: Option<substance_core::check::CheckId>,
     /// What the record is about.
     pub target: substance_core::model::Target,
     /// The snapshot the action ran on.
@@ -99,7 +99,9 @@ impl RecordContext {
         let repetition = [self.repetition];
         RecordId::derive(&[
             self.run_id.as_str().as_bytes(),
-            self.check_id.as_str().as_bytes(),
+            // A crawl record has no check: the empty string is the id of "no check", and it cannot
+            // collide with a real id because every real id has at least three characters.
+            self.check_id.map_or("", |id| id.as_str()).as_bytes(),
             self.target.sort_key().0.as_bytes(),
             self.target.sort_key().1.as_bytes(),
             self.action.kind.as_bytes(),

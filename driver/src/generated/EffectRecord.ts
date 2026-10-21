@@ -30,9 +30,15 @@ id: RecordId,
  */
 run_id: RunId, 
 /**
- * The check that asked for the action.
+ * The check that asked for the action, or `None` for the crawl's own records.
+ *
+ * The crawler (M4-T01) observes every control on every screen, and no check asked for those
+ * actions: they are what the app does, not a probe of a defect. Making the field optional rather
+ * than inventing a pseudo-check keeps "which check produced this?" answerable with "none", which
+ * is true, instead of naming a check that never ran. Every other record has one, and the
+ * record id derives from it, so a crawl record can never collide with a check's record.
  */
-check_id: CheckId, 
+check_id: CheckId | null, 
 /**
  * What the record is about.
  */

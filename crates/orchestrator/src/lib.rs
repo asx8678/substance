@@ -5,6 +5,7 @@
 //! v0, in which every check that cannot run yet reports `not_measured` with a reason.
 
 pub mod config;
+pub mod explore;
 pub mod handlers;
 pub mod intake;
 pub mod manifest;
