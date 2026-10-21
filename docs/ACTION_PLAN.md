@@ -312,7 +312,7 @@ exit $fail
     - 0014 `Measured<T>` channels in EffectRecord, a deviation from the plan's JSON sample
   - Later tasks add 0015–0024.
 - **Outcome:** 15 files in `docs/decisions/`.
-- **Checks:** `ls docs/decisions | wc -l` prints `15`. `rg -L '^Status:' docs/decisions` prints nothing.
+- **Checks:** `ls docs/decisions | wc -l` prints `15`. `rg --files-without-match '^Status:' docs/decisions` prints nothing.
 
 #### M0-T03 Core: IDs, enums and the check registry
 
