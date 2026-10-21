@@ -1,0 +1,36 @@
+# Check thresholds (ADR-0016).
+#
+# `calibrated` stays false until the benchmark corpora set these numbers; while it is
+# false the report says "thresholds uncalibrated" and no reader should treat a failure
+# here as a verdict about a person or a project.
+#
+# M1-T06 extends this file with the archetype cut-offs, the H12/H20 thresholds and the
+# remaining history keys. M1-T05 reads only the six values below: a check whose key is
+# absent has no threshold and reports its metrics without a pass or a fail (ADR-0013).
+
+version = 1
+calibrated = false
+
+[history]
+# H04: a commit that adds this many authored lines is a giant commit, and the share of
+# today's blamed lines that come from such commits is the `giant_share_permille` metric.
+# A share at or above the second value fails the check.
+giant_lines = 1000
+giant_share_permille = 500
+
+# H05: the 90th percentile of authored lines per minute, where the minutes are the gap to
+# the same author's previous commit (at least one). At or above this, the check fails.
+machine_speed_p90_lines_per_minute = 100
+
+# H07: at or above this many fix chains, the check fails. A chain is three or more commits
+# by one author, each within 30 minutes of the last, touching overlapping files, with a
+# "fix" subject and a failing CI run between them.
+fix_chains = 3
+
+# H09: the share of lines added in the last 365 days that a later commit deletes again,
+# identically and in the same file, within 7 days. At or above this, the check fails.
+short_lived_permille = 250
+
+# H10: the share of commits whose whole subject is a generic message. At or above this,
+# the check fails.
+generic_message_permille = 500

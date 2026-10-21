@@ -1,0 +1,21 @@
+# Subjects that say nothing about the change (H10).
+#
+# One subject per line, compared case-insensitively against a commit's whole subject.
+# A line that starts with `#` is a comment; trailing spaces are ignored. The list is the
+# catalog's, plus the shells a generator leaves behind when it commits its own work.
+update
+fix
+fixes
+wip
+changes
+minor
+cleanup
+clean up
+stuff
+commit
+.
+initial commit
+initial
+updates
+tweaks
+misc

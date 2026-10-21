@@ -8,6 +8,7 @@ pub mod dates;
 pub mod forge;
 pub mod git;
 pub mod registry;
+pub mod signals;
 pub mod snapshot;
 
 pub use forge::{

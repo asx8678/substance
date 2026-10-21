@@ -14,6 +14,7 @@ pub mod model;
 pub mod parts;
 pub mod registry;
 pub mod schema_export;
+pub mod thresholds;
 pub mod tools;
 
 pub use check::{
@@ -34,4 +35,5 @@ pub use model::{
 pub use parts::{CheckPart, parts_of};
 pub use registry::{CheckMeta, REGISTRY, meta};
 pub use schema_export::{SchemaFile, SchemaKind, TYPESCRIPT_DIR, TypeScriptFile};
+pub use thresholds::{HistoryThresholds, Thresholds, ThresholdsError};
 pub use tools::{MISSING_VERSION, PIN_TBD, ToolSpec, ToolsError, ToolsFile, Version, meets_floor};
