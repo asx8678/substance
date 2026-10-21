@@ -19,6 +19,10 @@
       ],
       "type": "object"
     },
+    "Timestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
     "ToastContainer": {
       "additionalProperties": false,
       "description": "A toast container, and how to tell a success toast from an error one.\n\nThe container selectors and the attribute values are data from `rules/signals.toml`, not\ncode: a new toast library is a rule-pack change, and the driver never grows a list of\nEnglish words that would silently stop matching when a library renames `success`.",
@@ -62,6 +66,10 @@
       "additionalProperties": false,
       "description": "Open a new isolated browser context.",
       "properties": {
+        "as_of": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "The instant the browser clock is installed at (M3-T06).\n\nInstalled with Playwright's `clock.install`, which starts the clock here and lets it advance:\na frozen instant would stop every timer a page schedules, and a page whose timers never fire\ndoes not settle. The session index's `clock` command moves it forward from here."
+        },
         "blob_dir": {
           "description": "Where bodies are written, as `sha256/<2>/<64>`.",
           "type": "string"
@@ -151,6 +159,7 @@
         "height",
         "locale",
         "tz",
+        "as_of",
         "normalize",
         "blob_dir",
         "success_selectors",

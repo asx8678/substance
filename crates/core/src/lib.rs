@@ -6,6 +6,7 @@
 
 pub mod check;
 pub mod clock;
+pub mod clock_controls;
 pub mod config;
 pub mod deps;
 pub mod hash;
@@ -24,6 +25,10 @@ pub use check::{
     Axis, CheckId, CheckStatus, Confidence, Family, GateRule, Level, Milestone, Need, Severity,
 };
 pub use clock::{Timestamp, wall_now_utc, window_start};
+pub use clock_controls::{
+    BROWSER_LOCALE, BROWSER_TIMEZONE, LOCALE, Libfaketime, TIMEZONE, faketime_env, faketime_value,
+    frozen_env, libfaketime_candidates, locale_env, server_clock,
+};
 pub use config::{
     ApiRequest, AppConfig, Budgets, ChecksConfig, ConfigError, DbConfig, DbEngine, EgressConfig,
     LoginConfig, LoginUi, MailConfig, NormalizeConfig, ProjectConfig, SignalsConfig, SignupConfig,

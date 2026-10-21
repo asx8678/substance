@@ -2234,7 +2234,7 @@ Tick each task in the same commit that completes it.
 - [x] M3-T03 Recorder channels
 - [x] M3-T04 Egress proxy and Mailpit
 - [x] M3-T05 Normalization and idle baseline
-- [ ] M3-T06 Clock, TZ, locale
+- [x] M3-T06 Clock, TZ, locale
 - [ ] M3-T07 Replay
 - [ ] M4-T01 Crawler
 - [ ] M4-T02 Oracle framework, 3-of-3

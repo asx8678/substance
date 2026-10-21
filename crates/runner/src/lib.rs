@@ -4,6 +4,7 @@
 pub mod blobs;
 pub mod budget;
 pub mod egress;
+pub mod host;
 pub mod interrupt;
 pub mod limits;
 pub mod logs;

@@ -335,44 +335,28 @@ fn playwright_report() -> PlaywrightReport {
 
 /// Whether `libfaketime.so.1` is installed.
 ///
-/// Linux only, and the `applicable` flag says so: macOS has no libfaketime, so reporting it missing
-/// there would be reporting a platform difference as a defect.
+/// The search itself is `substance_core::clock_controls::detect_libfaketime`, not a second copy here:
+/// the run applies the result as `LD_PRELOAD` (M3-T06), and a doctor that found the library in a
+/// directory the run does not search would report a host as ready for a frozen clock that then ran on
+/// the real one. `applicable` is false on macOS, which has no libfaketime at all, so a missing library
+/// there would be a platform difference reported as a defect.
 fn libfaketime_report() -> LibfaketimeReport {
-    if !cfg!(target_os = "linux") {
-        return LibfaketimeReport {
+    match substance_runner::host::detect_libfaketime() {
+        found @ substance_core::clock_controls::Libfaketime::Found(_) => LibfaketimeReport {
+            present: true,
+            path: found.path().map(|path| path.display().to_string()),
+            applicable: true,
+        },
+        substance_core::clock_controls::Libfaketime::Missing => LibfaketimeReport {
+            present: false,
+            path: None,
+            applicable: true,
+        },
+        substance_core::clock_controls::Libfaketime::UnsupportedPlatform => LibfaketimeReport {
             present: false,
             path: None,
             applicable: false,
-        };
-    }
-    for dir in [
-        "/usr/lib/x86_64-linux-gnu",
-        "/usr/lib/aarch64-linux-gnu",
-        "/usr/lib64",
-        "/usr/lib",
-        "/usr/local/lib",
-    ] {
-        let candidate = Path::new(dir).join("faketime/libfaketime.so.1");
-        if candidate.is_file() {
-            return LibfaketimeReport {
-                present: true,
-                path: Some(candidate.display().to_string()),
-                applicable: true,
-            };
-        }
-        let plain = Path::new(dir).join("libfaketime.so.1");
-        if plain.is_file() {
-            return LibfaketimeReport {
-                present: true,
-                path: Some(plain.display().to_string()),
-                applicable: true,
-            };
-        }
-    }
-    LibfaketimeReport {
-        present: false,
-        path: None,
-        applicable: true,
+        },
     }
 }
 

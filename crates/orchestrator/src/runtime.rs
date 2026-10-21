@@ -118,6 +118,17 @@ pub struct RuntimeInput<'a> {
     pub tools: &'a [(String, ToolSpec)],
     /// The permission to run repo-controlled code, when `--allow-exec` was given.
     pub permit: Option<&'a ExecPermit>,
+    /// The instant the run pretends it is, from the manifest.
+    ///
+    /// The server clock starts here when `libfaketime` can be applied (M3-T06), and the browser clock
+    /// is installed here by the driver. Passed in rather than read from the manifest again so the
+    /// stage cannot freeze one clock at one instant and the other at another.
+    pub as_of: substance_core::Timestamp,
+    /// What this host can do about the server clock, detected once before the manifest.
+    ///
+    /// The same value the manifest recorded, so the `LD_PRELOAD` the app receives and the
+    /// `server_clock` a reader sees are one decision (ADR-0022).
+    pub libfaketime: &'a substance_core::clock_controls::Libfaketime,
     /// The run's interrupt registrar, so a Ctrl-C reaches the app and the database.
     pub registrar: &'a Registrar,
     /// Where egress bodies and email bodies go.
@@ -254,10 +265,24 @@ pub async fn run(input: &RuntimeInput<'_>) -> Result<RuntimeOutcome, String> {
     };
 
     let database = provision(input, &mut outcome).await;
-    let mut env = match database.as_ref() {
-        Some((adapter, handle)) => app_env(adapter, handle),
-        None => BTreeMap::new(),
-    };
+    let mut env = frozen(
+        match database.as_ref() {
+            Some((adapter, handle)) => app_env(adapter, handle),
+            None => BTreeMap::new(),
+        },
+        input,
+    );
+    match substance_core::clock_controls::server_clock(input.libfaketime) {
+        substance_core::model::ServerClock::FixedStart => outcome.notes.push(format!(
+            "runtime: the server clock starts at {} and advances (libfaketime)",
+            input.as_of.to_rfc3339()
+        )),
+        substance_core::model::ServerClock::Real => outcome.notes.push(
+            "runtime: the server clock is the host's real clock (libfaketime is not usable here), \
+             so server-clock checks report not_measured"
+                .to_owned(),
+        ),
+    }
 
     // The outside world is closed *before* the app starts, because the app reads its proxy
     // variables at boot: a client that captures them once would otherwise keep talking to the
@@ -351,6 +376,19 @@ pub fn canaries_of(input: &RuntimeInput<'_>) -> Canaries {
     };
     canaries.sort();
     canaries
+}
+
+/// `env` with the frozen-clock variables applied (M3-T06).
+///
+/// Applied to the whole map rather than at each spawn site: the app, its install and build steps, the
+/// migrate re-run and the seed all run repo-controlled code, and a clock that moves for one of them
+/// and not the others would make the seed's timestamps disagree with the app's own rows. The map is
+/// sorted, so the environment a step receives does not depend on the order it was assembled in.
+fn frozen(mut env: BTreeMap<String, String>, input: &RuntimeInput<'_>) -> BTreeMap<String, String> {
+    for (key, value) in substance_core::clock_controls::frozen_env(input.libfaketime, input.as_of) {
+        env.insert(key, value);
+    }
+    env
 }
 
 /// The environment the app needs to reach its database.
@@ -714,7 +752,9 @@ async fn seed_repository(
         );
         return true;
     };
-    let env = app_env(adapter, handle);
+    // The freeze applies here too: the seed runs repo-controlled code that writes timestamps into the
+    // database, and a seed on the real clock would disagree with the app's own rows.
+    let env = frozen(app_env(adapter, handle), input);
     outcome.notes.push(format!(
         "runtime: seeding with {} (from {evidence})",
         command.display()

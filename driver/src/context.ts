@@ -81,6 +81,16 @@ export class DriverContext {
       ignoreHTTPSErrors: true,
     });
     this.page = await this.context.newPage();
+    // M3-T06: the clock starts at the manifest's `frozen_clock` and keeps advancing. `install` rather
+    // than `setFixedTime` on purpose -- a fixed instant stops every `setTimeout`, so a page waiting on
+    // a debounce or a poll never settles and the run reports a timeout instead of an observation. Its
+    // place is the first page, before anything navigates, because a page that loaded first would
+    // already have read `Date.now()` on the host's clock.
+    //
+    // The instant arrives in `open_context` rather than being read here: the browser and the server
+    // must start at the same instant, and `Date.now()` in the driver is the wall clock this task
+    // exists to stop using.
+    await this.page.clock.install({ time: Date.parse(this.open.as_of) });
     this.reader = new StorageReader(this.page, this.context, this.log);
     this.signals = new Signals(
       this.page,

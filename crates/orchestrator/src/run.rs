@@ -214,7 +214,11 @@ async fn run_stages(
     // is handed the same map: a seed the stage used but the manifest did not record would make two
     // different runs share one run id.
     let seeds = substance_core::model::seeds_for(master_seed, crate::runtime::GENERATORS);
+    // Detected once, before the manifest: the same answer decides `server_clock` in the manifest and
+    // the app's `LD_PRELOAD`, so the record and the run cannot disagree.
+    let libfaketime = substance_runner::host::detect_libfaketime();
     let manifest = build(&ManifestInputs {
+        libfaketime: &libfaketime,
         checkout: &checkout,
         as_of,
         master_seed,
@@ -295,6 +299,10 @@ async fn run_stages(
         run_dir: run_dir.as_path(),
         run_id: &manifest.run_id,
         master_seed,
+        // The manifest's own values, not detected again: the stage must freeze the clocks at the
+        // instant the record says it did.
+        as_of: manifest.frozen_clock,
+        libfaketime: &libfaketime,
         tools: &runtime_tools,
         permit: checkout.permit.as_ref(),
         registrar,

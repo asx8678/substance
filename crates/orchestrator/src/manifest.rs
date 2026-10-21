@@ -8,10 +8,9 @@
 
 use std::collections::BTreeMap;
 
+use substance_core::clock_controls::Libfaketime;
 use substance_core::hash::{CanonicalJsonError, canonical_json_value, sha256};
-use substance_core::model::manifest::{
-    AccessMode, Host, RepoRef, RunManifest, ServerClock, ToolVersion,
-};
+use substance_core::model::manifest::{AccessMode, Host, RepoRef, RunManifest, ToolVersion};
 use substance_core::model::report::REPORT_SCHEMA_VERSION;
 use substance_core::{RunId, Timestamp};
 
@@ -48,6 +47,14 @@ pub struct ManifestInputs<'a> {
     pub rule_pack_hash: String,
     /// The provenance rule files' sha256, from the embedded `rules/provenance/*.toml`.
     pub provenance_rules_hash: String,
+    /// What this host can do about the server clock, decided by the core's detector before the
+    /// manifest is built.
+    ///
+    /// An input to the run id, not a footnote: a run whose server clock moved and one whose server
+    /// clock did not are different runs, and their findings differ. Deciding it in the caller means
+    /// the same value reaches the manifest and the app's environment, so a run cannot silently
+    /// freeze the clock while claiming it did not.
+    pub libfaketime: &'a Libfaketime,
     /// One seed per generator, derived from `master_seed`.
     ///
     /// Filled in by the caller before the run id is derived, because a seed is an input: two runs
@@ -77,9 +84,11 @@ pub fn build(inputs: &ManifestInputs<'_>) -> Result<RunManifest, CanonicalJsonEr
         // Before `derive_run_id`: the seeds are inputs, so they belong inside the hash.
         seeds: inputs.seeds.clone(),
         frozen_clock: inputs.as_of,
-        server_clock: ServerClock::Real,
-        timezone: "UTC".to_owned(),
-        locale: "en-US".to_owned(),
+        // Decided from the host, before the run id is derived, because it changes what the run can
+        // see: a run whose server clock moved and one whose did not are different runs.
+        server_clock: substance_core::clock_controls::server_clock(inputs.libfaketime),
+        timezone: substance_core::clock_controls::BROWSER_TIMEZONE.to_owned(),
+        locale: substance_core::clock_controls::BROWSER_LOCALE.to_owned(),
         tools: inputs.tools.clone(),
         models: BTreeMap::new(),
         rule_pack_hash: inputs.rule_pack_hash.clone(),

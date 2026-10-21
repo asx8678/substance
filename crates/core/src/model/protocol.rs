@@ -62,6 +62,12 @@ pub struct OpenContext {
     pub locale: String,
     /// The timezone, for example `"UTC"`.
     pub tz: String,
+    /// The instant the browser clock is installed at (M3-T06).
+    ///
+    /// Installed with Playwright's `clock.install`, which starts the clock here and lets it advance:
+    /// a frozen instant would stop every timer a page schedules, and a page whose timers never fire
+    /// does not settle. The session index's `clock` command moves it forward from here.
+    pub as_of: Timestamp,
     /// A saved storage state to restore, when a session already exists.
     pub storage_state: Option<String>,
     /// The normalization rules, as regex and replacement pairs.

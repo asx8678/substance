@@ -58,4 +58,14 @@ fi
 # one line per tracked path, so the root files are the ones with no `/` in them.
 check "no tracked scratch files at the repository root (rule 9)" \
   sh -c 'git ls-files --directory | grep -v / | grep -Eq "^(tmp_|scratch)|\.(orig|rej)$"'
+# §4.2: crates/core is the pure layer -- content-derived IDs, the registry, the models, the clock.
+# It must stay IO-free so every rule in it is a function of its inputs, which is what makes a record
+# reproducible from a manifest. `clock.rs` is the single exception: reading the wall clock is the one
+# thing core has to do, and ADR-0009 keeps it in one auditable place. The guard is what keeps
+# "IO-free" a property of the tree rather than a habit: a `is_file()` in core compiles, works, and
+# silently makes a rule depend on the machine it ran on.
+check "filesystem or environment IO in crates/core outside clock.rs (§4.2)" \
+  sh -c 'rg -n --glob "*.rs" --glob "!**/core/src/clock.rs" \
+    "std::fs|std::env|File::|\\.is_file\\(|\\.exists\\(|read_dir\\(|\\.metadata\\(" \
+    crates/core/src | rg -v "std::env::consts"'
 exit $fail

@@ -56,9 +56,11 @@ use crate::port::free_port;
 /// latter: a fixed `TZ` and `LANG` so date formatting and message text do not depend on the
 /// machine, and `CI` so tools that behave differently in CI behave predictably here.
 pub const OWN_ENV: &[(&str, &str)] = &[
-    ("TZ", "UTC"),
-    ("LANG", "en_US.UTF-8"),
-    ("LC_ALL", "en_US.UTF-8"),
+    // The zone and locale come from the core's constants rather than being spelled again here: the
+    // manifest records the same three strings (M3-T06), and two literals would eventually disagree.
+    ("TZ", substance_core::clock_controls::TIMEZONE),
+    ("LANG", substance_core::clock_controls::LOCALE),
+    ("LC_ALL", substance_core::clock_controls::LOCALE),
     ("CI", "1"),
     // npm and node read these; leaving them unset makes a "clean" environment behave
     // differently from the developer's, which is the opposite of what a clean environment is for.

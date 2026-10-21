@@ -13,6 +13,7 @@
 //! same screen, so a context opened before the baseline has taken one passes an empty list and
 //! excludes nothing; that is the honest state, not an error.
 
+use substance_core::Timestamp;
 use substance_core::config::ProjectConfig;
 use substance_core::model::{NormalizePattern, OpenContext, ToastContainer};
 use substance_core::normalize::Normalizer;
@@ -35,6 +36,12 @@ pub struct ContextPlan {
     pub storage_state: Option<String>,
     /// The idle baseline's patterns for the screen the context starts on.
     pub idle_patterns: Vec<String>,
+    /// The instant the browser clock starts at, from the manifest's `frozen_clock`.
+    ///
+    /// A field rather than a default: the browser and the server must start at the same instant, and
+    /// a context opened without saying when would install a clock at whatever the driver's own
+    /// `Date.now()` returned, which is the wall clock this task exists to stop using.
+    pub as_of: Timestamp,
 }
 
 /// Builds the `open_context` command for `config`.
@@ -57,10 +64,11 @@ pub fn open_context(
     Ok(OpenContext {
         width: WIDTH,
         height: HEIGHT,
-        // `en-US` and `UTC` are M3-T06's inputs recorded here so a context opened before that task
-        // still runs in a fixed locale rather than the host's.
-        locale: "en-US".to_owned(),
-        tz: "UTC".to_owned(),
+        // M3-T06: the same constants the manifest and the app's environment use, so a record's
+        // `locale`/`timezone` and the browser's are one value rather than three that agree by luck.
+        locale: substance_core::clock_controls::BROWSER_LOCALE.to_owned(),
+        tz: substance_core::clock_controls::BROWSER_TIMEZONE.to_owned(),
+        as_of: plan.as_of,
         storage_state: plan.storage_state.clone(),
         normalize: normalizer.patterns(),
         blob_dir: plan.blob_dir.clone(),
